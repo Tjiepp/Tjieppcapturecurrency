@@ -101,6 +101,24 @@ export default function AddProductScreen() {
     }
   };
 
+  const handleGetInfoFromUrl = () => {
+    if (!url.trim()) {
+      Alert.alert('URL Required', 'Please enter a product URL first.');
+      return;
+    }
+
+    if (!url.startsWith('http')) {
+      Alert.alert('Invalid URL', 'Please enter a valid URL starting with http:// or https://');
+      return;
+    }
+
+    // Navigate to capture screen with the URL
+    router.push({
+      pathname: '/capture',
+      params: { url: url.trim() }
+    });
+  };
+
   const analyzeScreenshot = async () => {
     if (!screenshot) {
       Alert.alert('No Screenshot', 'Please upload or take a screenshot first.');
@@ -223,27 +241,46 @@ export default function AddProductScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Add Product</Text>
             <Text style={styles.headerSubtitle}>
-              Upload a screenshot or enter a URL
+              Share a URL or upload a screenshot
             </Text>
           </View>
 
-          {/* URL Input */}
+          {/* URL Input Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Product URL (Optional)</Text>
-            <TextInput
-              style={styles.urlInput}
-              placeholder="https://amazon.com/product..."
-              placeholderTextColor="#6b7280"
-              value={url}
-              onChangeText={setUrl}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
+            <Text style={styles.sectionTitle}>Product URL</Text>
+            <View style={styles.urlInputRow}>
+              <TextInput
+                style={styles.urlInput}
+                placeholder="https://amazon.com/product..."
+                placeholderTextColor="#6b7280"
+                value={url}
+                onChangeText={setUrl}
+                autoCapitalize="none"
+                keyboardType="url"
+              />
+            </View>
+            <TouchableOpacity 
+              style={styles.getInfoButton}
+              onPress={handleGetInfoFromUrl}
+            >
+              <Ionicons name="globe-outline" size={20} color="#fff" />
+              <Text style={styles.getInfoButtonText}>Get Info from URL</Text>
+            </TouchableOpacity>
+            <Text style={styles.hintText}>
+              Tip: Share a URL from any app to auto-fill this field
+            </Text>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
           </View>
 
           {/* Screenshot Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Screenshot</Text>
+            <Text style={styles.sectionTitle}>Upload Screenshot</Text>
             
             {screenshot ? (
               <View style={styles.screenshotContainer}>
@@ -432,7 +469,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 12,
   },
+  urlInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   urlInput: {
+    flex: 1,
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
@@ -440,6 +482,45 @@ const styles = StyleSheet.create({
     fontSize: 15,
     borderWidth: 1,
     borderColor: '#2a2a2a',
+  },
+  getInfoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366f1',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 12,
+  },
+  getInfoButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  hintText: {
+    color: '#6b7280',
+    fontSize: 13,
+    marginTop: 10,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#2a2a2a',
+  },
+  dividerText: {
+    color: '#6b7280',
+    paddingHorizontal: 16,
+    fontSize: 14,
+    fontWeight: '500',
   },
   uploadOptions: {
     flexDirection: 'row',

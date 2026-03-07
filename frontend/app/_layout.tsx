@@ -1,10 +1,37 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ShareIntentProvider, useShareIntent } from 'expo-share-intent';
+import { router } from 'expo-router';
+import { Platform } from 'react-native';
+
+function ShareIntentHandler({ children }: { children: React.ReactNode }) {
+  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntent();
+
+  useEffect(() => {
+    if (hasShareIntent && shareIntent) {
+      // Handle shared URL
+      const sharedUrl = shareIntent.webUrl || shareIntent.text || '';
+      
+      if (sharedUrl && sharedUrl.startsWith('http')) {
+        console.log('Received shared URL:', sharedUrl);
+        // Navigate to capture screen with the URL
+        router.push({
+          pathname: '/capture',
+          params: { url: sharedUrl }
+        });
+        resetShareIntent();
+      }
+    }
+  }, [hasShareIntent, shareIntent]);
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
-  return (
+  // Only use ShareIntentProvider on native platforms
+  const content = (
     <SafeAreaProvider>
       <StatusBar style="light" />
       <Stack
@@ -23,7 +50,27 @@ export default function RootLayout() {
             animation: 'slide_from_bottom'
           }} 
         />
+        <Stack.Screen 
+          name="capture" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right'
+          }} 
+        />
       </Stack>
     </SafeAreaProvider>
+  );
+
+  // Wrap with ShareIntentProvider only on native
+  if (Platform.OS === 'web') {
+    return content;
+  }
+
+  return (
+    <ShareIntentProvider>
+      <ShareIntentHandler>
+        {content}
+      </ShareIntentHandler>
+    </ShareIntentProvider>
   );
 }
