@@ -72,6 +72,7 @@ class ProductUpdate(BaseModel):
 class AnalyzeScreenshotRequest(BaseModel):
     screenshot_base64: str
     url: str = ""
+    page_content: str = ""  # Full page text content extracted via JS
 
 class AnalyzeURLRequest(BaseModel):
     url: str
@@ -84,8 +85,8 @@ class ExtractedProductInfo(BaseModel):
     confidence: float = 0.0
 
 # AI Analysis Function
-async def analyze_product_screenshot(screenshot_base64: str, url: str = "") -> dict:
-    """Use AI to analyze a product screenshot and extract information."""
+async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page_content: str = "") -> dict:
+    """Use AI to analyze a product screenshot and page content to extract information."""
     try:
         # Clean the base64 string (remove data URL prefix if present)
         if ',' in screenshot_base64:
@@ -96,29 +97,46 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "") -> d
             api_key=EMERGENT_LLM_KEY,
             session_id=f"product-analysis-{uuid.uuid4()}",
             system_message="""You are a product information extraction expert. 
-            Analyze product screenshots and extract structured information.
+            Analyze product screenshots and page content to extract structured information.
             Always respond with valid JSON only, no other text.
-            Extract product details accurately from the visual content."""
+            Extract product details accurately from all available sources."""
         ).with_model("openai", "gpt-5.2")
         
         # Create image content
         image_content = ImageContent(image_base64=screenshot_base64)
         
-        prompt = f"""Analyze this product screenshot and extract the following information.
+        # Build comprehensive prompt with page content if available
+        page_context = ""
+        if page_content:
+            # Truncate if too long (keep first 4000 chars)
+            truncated_content = page_content[:4000] if len(page_content) > 4000 else page_content
+            page_context = f"""
+            
+FULL PAGE CONTENT (extracted from entire page, not just visible area):
+{truncated_content}
+"""
         
-        {f'The product URL is: {url}' if url else ''}
+        prompt = f"""Analyze this product page and extract the following information.
         
-        Return ONLY a valid JSON object with these exact fields:
-        {{
-            "name": "Product name as shown",
-            "price": "Price including currency symbol (e.g., $29.99)",
-            "description": "Brief product description (max 200 chars)",
-            "brand": "Brand name if visible",
-            "confidence": 0.0 to 1.0 based on how clearly info was visible
-        }}
-        
-        If any field is not visible or unclear, use an empty string "".
-        Return ONLY the JSON, no explanation or markdown."""
+Product URL: {url if url else 'Not provided'}
+{page_context}
+
+I'm also providing a screenshot of the visible portion. Use BOTH the page content AND the screenshot to extract accurate product information.
+
+Return ONLY a valid JSON object with these exact fields:
+{{
+    "name": "Full product name",
+    "price": "Price including currency symbol (e.g., $29.99). Look for sale price, current price, or listed price.",
+    "description": "Product description (max 250 chars). Summarize key features.",
+    "brand": "Brand name",
+    "confidence": 0.0 to 1.0 based on how complete the extraction was
+}}
+
+IMPORTANT: 
+- Extract info from the FULL PAGE CONTENT, not just what's visible in the screenshot
+- Look for price in various formats: $XX.XX, €XX,XX, £XX.XX, etc.
+- If multiple prices exist, prefer the sale/current price over original price
+- Return ONLY the JSON, no explanation or markdown."""
         
         # Send message with image
         user_message = UserMessage(
@@ -177,7 +195,11 @@ async def analyze_screenshot(request: AnalyzeScreenshotRequest):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(status_code=500, detail="AI service not configured")
     
-    result = await analyze_product_screenshot(request.screenshot_base64, request.url)
+    result = await analyze_product_screenshot(
+        request.screenshot_base64, 
+        request.url,
+        request.page_content
+    )
     return result
 
 # Get all products

@@ -45,6 +45,7 @@ export default function CaptureScreen() {
   const [extractedInfo, setExtractedInfo] = useState<ExtractedInfo | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pageContent, setPageContent] = useState('');
   
   // Editable fields
   const [name, setName] = useState('');
@@ -52,7 +53,7 @@ export default function CaptureScreen() {
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
 
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
 
   useEffect(() => {
@@ -62,8 +63,95 @@ export default function CaptureScreen() {
     }
   }, [params.url]);
 
+  // JavaScript to inject into WebView to extract page content
+  const extractPageContentJS = `
+    (function() {
+      try {
+        // Get all text content from the page
+        const getTextContent = () => {
+          // Get meta tags
+          const metaTags = {};
+          document.querySelectorAll('meta').forEach(meta => {
+            const name = meta.getAttribute('name') || meta.getAttribute('property');
+            const content = meta.getAttribute('content');
+            if (name && content) metaTags[name] = content;
+          });
+          
+          // Get title
+          const title = document.title || '';
+          
+          // Get price - look for common price patterns
+          const priceElements = document.querySelectorAll('[class*="price"], [id*="price"], [data-price], .price, .product-price, .sale-price, .current-price');
+          const prices = Array.from(priceElements).map(el => el.textContent?.trim()).filter(Boolean);
+          
+          // Get product name - look for h1, product title elements
+          const nameElements = document.querySelectorAll('h1, [class*="product-title"], [class*="product-name"], [class*="title"]');
+          const names = Array.from(nameElements).slice(0, 3).map(el => el.textContent?.trim()).filter(Boolean);
+          
+          // Get description
+          const descElements = document.querySelectorAll('[class*="description"], [class*="details"], [id*="description"], meta[name="description"]');
+          const descriptions = Array.from(descElements).map(el => el.textContent?.trim() || el.getAttribute('content')).filter(Boolean);
+          
+          // Get brand
+          const brandElements = document.querySelectorAll('[class*="brand"], [data-brand], [itemprop="brand"]');
+          const brands = Array.from(brandElements).map(el => el.textContent?.trim()).filter(Boolean);
+          
+          // Get main content area text
+          const mainContent = document.querySelector('main, [role="main"], .product, .product-detail, #product')?.textContent?.substring(0, 2000) || '';
+          
+          // Get structured data if available
+          let structuredData = {};
+          const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+          jsonLdScripts.forEach(script => {
+            try {
+              const data = JSON.parse(script.textContent || '{}');
+              if (data['@type'] === 'Product' || data['@type']?.includes('Product')) {
+                structuredData = data;
+              }
+            } catch(e) {}
+          });
+          
+          return JSON.stringify({
+            title,
+            metaTags,
+            prices: prices.slice(0, 5),
+            names: names.slice(0, 3),
+            descriptions: descriptions.slice(0, 2),
+            brands: brands.slice(0, 2),
+            mainContent: mainContent.substring(0, 1500),
+            structuredData,
+            url: window.location.href
+          });
+        };
+        
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'PAGE_CONTENT',
+          content: getTextContent()
+        }));
+      } catch(e) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'PAGE_CONTENT',
+          content: JSON.stringify({ error: e.message, bodyText: document.body?.innerText?.substring(0, 3000) || '' })
+        }));
+      }
+    })();
+    true;
+  `;
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'PAGE_CONTENT') {
+        console.log('Received page content');
+        setPageContent(data.content);
+      }
+    } catch (e) {
+      console.log('WebView message parse error:', e);
+    }
+  };
+
   const captureScreenshot = async () => {
-    if (!viewShotRef.current) {
+    if (!viewShotRef.current || !captureRef) {
       Alert.alert('Error', 'WebView not ready');
       return;
     }
@@ -71,7 +159,14 @@ export default function CaptureScreen() {
     try {
       setAnalyzing(true);
       
-      // Capture the WebView
+      // First, inject JS to extract page content
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(extractPageContentJS);
+        // Wait a bit for the content to be extracted
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Capture the WebView screenshot
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
         quality: 0.8,
@@ -81,10 +176,11 @@ export default function CaptureScreen() {
       const base64Image = `data:image/jpeg;base64,${uri}`;
       setScreenshot(base64Image);
 
-      // Send to AI for analysis
+      // Send to AI for analysis with both screenshot AND page content
       const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
         screenshot_base64: base64Image,
         url: url,
+        page_content: pageContent, // Include full page content!
       });
 
       const info = response.data;
@@ -152,6 +248,12 @@ export default function CaptureScreen() {
   const handleLoadEnd = () => {
     setIsLoading(false);
     setPageLoaded(true);
+    // Extract page content when loaded
+    if (webViewRef.current) {
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(extractPageContentJS);
+      }, 1000); // Wait for dynamic content to load
+    }
   };
 
   const handleLoadStart = () => {
@@ -257,6 +359,7 @@ export default function CaptureScreen() {
                       style={styles.webView}
                       onLoadStart={handleLoadStart}
                       onLoadEnd={handleLoadEnd}
+                      onMessage={handleWebViewMessage}
                       onError={(e: any) => {
                         setIsLoading(false);
                         Alert.alert('Error', 'Failed to load the page.');
@@ -275,6 +378,20 @@ export default function CaptureScreen() {
                     )}
                   </View>
 
+                  {/* Status indicator for page content extraction */}
+                  {pageLoaded && (
+                    <View style={styles.statusBar}>
+                      <Ionicons 
+                        name={pageContent ? "checkmark-circle" : "hourglass-outline"} 
+                        size={16} 
+                        color={pageContent ? "#22c55e" : "#f59e0b"} 
+                      />
+                      <Text style={[styles.statusText, { color: pageContent ? "#22c55e" : "#f59e0b" }]}>
+                        {pageContent ? "Full page content extracted" : "Extracting page content..."}
+                      </Text>
+                    </View>
+                  )}
+
                   {/* Get Info Button */}
                   {pageLoaded && !extractedInfo && (
                     <TouchableOpacity
@@ -285,12 +402,12 @@ export default function CaptureScreen() {
                       {analyzing ? (
                         <>
                           <ActivityIndicator color="#fff" size="small" />
-                          <Text style={styles.captureButtonText}>Analyzing...</Text>
+                          <Text style={styles.captureButtonText}>Analyzing full page...</Text>
                         </>
                       ) : (
                         <>
                           <Ionicons name="sparkles" size={20} color="#fff" />
-                          <Text style={styles.captureButtonText}>Get Info</Text>
+                          <Text style={styles.captureButtonText}>Get Info (Full Page)</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -496,6 +613,17 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.7,
+  },
+  statusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   webFallback: {
     flex: 1,
