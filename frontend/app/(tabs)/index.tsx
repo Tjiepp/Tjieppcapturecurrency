@@ -135,10 +135,22 @@ export default function ProductsScreen() {
               <Text style={styles.originalPrice}>{item.original_price}</Text>
             ) : null}
           </View>
+          {/* Size and Color underneath price */}
           {(item.color || item.size) ? (
-            <Text style={styles.productMeta} numberOfLines={1}>
-              {[item.color, item.size].filter(Boolean).join(' • ')}
-            </Text>
+            <View style={styles.attributesRow}>
+              {item.color ? (
+                <View style={styles.attributeTag}>
+                  <Ionicons name="color-palette-outline" size={12} color="#9ca3af" />
+                  <Text style={styles.attributeText}>{item.color}</Text>
+                </View>
+              ) : null}
+              {item.size ? (
+                <View style={styles.attributeTag}>
+                  <Ionicons name="resize-outline" size={12} color="#9ca3af" />
+                  <Text style={styles.attributeText}>{item.size}</Text>
+                </View>
+              ) : null}
+            </View>
           ) : null}
         </View>
       </TouchableOpacity>
@@ -310,10 +322,25 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     textDecorationLine: 'line-through',
   },
-  productMeta: {
+  attributesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  attributeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#262626',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  attributeText: {
     fontSize: 11,
-    color: '#6b7280',
-    marginTop: 4,
+    color: '#9ca3af',
+    maxWidth: 70,
   },
   emptyContainer: {
     flex: 1,
