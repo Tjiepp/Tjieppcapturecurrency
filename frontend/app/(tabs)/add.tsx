@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import axios from 'axios';
 import { router } from 'expo-router';
 
@@ -72,35 +73,6 @@ export default function AddProductScreen() {
     }
   };
 
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission Required',
-        'Please grant camera access to take screenshots.'
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets[0].base64) {
-      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setScreenshot(base64Image);
-      setExtractedInfo(null);
-      // Reset form
-      setName('');
-      setPrice('');
-      setDescription('');
-      setBrand('');
-    }
-  };
-
   const handleGetInfoFromUrl = () => {
     if (!url.trim()) {
       Alert.alert('URL Required', 'Please enter a product URL first.');
@@ -117,6 +89,28 @@ export default function AddProductScreen() {
       pathname: '/capture',
       params: { url: url.trim() }
     });
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      const clipboardContent = await Clipboard.getStringAsync();
+      if (clipboardContent) {
+        if (clipboardContent.startsWith('http')) {
+          // Set URL and automatically navigate to capture screen
+          setUrl(clipboardContent);
+          router.push({
+            pathname: '/capture',
+            params: { url: clipboardContent.trim() }
+          });
+        } else {
+          Alert.alert('Invalid URL', 'Clipboard does not contain a valid URL (must start with http:// or https://)');
+        }
+      } else {
+        Alert.alert('Clipboard Empty', 'No content found in clipboard');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not read from clipboard');
+    }
   };
 
   const analyzeScreenshot = async () => {
@@ -267,6 +261,16 @@ export default function AddProductScreen() {
                 </TouchableOpacity>
               )}
             </View>
+            
+            {/* Paste URL Button */}
+            <TouchableOpacity 
+              style={styles.pasteUrlButton}
+              onPress={pasteFromClipboard}
+            >
+              <Ionicons name="clipboard-outline" size={20} color="#6366f1" />
+              <Text style={styles.pasteUrlButtonText}>Paste URL from Clipboard</Text>
+            </TouchableOpacity>
+
             <View style={styles.urlButtonsRow}>
               <TouchableOpacity 
                 style={[styles.getInfoButton, !url && styles.disabledButton]}
@@ -286,7 +290,7 @@ export default function AddProductScreen() {
               )}
             </View>
             <Text style={styles.hintText}>
-              Tip: Share a URL from any app to auto-fill this field
+              Tip: Copy a product URL, then tap "Paste URL" above
             </Text>
           </View>
 
@@ -316,16 +320,10 @@ export default function AddProductScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.uploadOptions}>
-                <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-                  <Ionicons name="images-outline" size={32} color="#6366f1" />
-                  <Text style={styles.uploadButtonText}>Choose from Gallery</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.uploadButton} onPress={takePhoto}>
-                  <Ionicons name="camera-outline" size={32} color="#6366f1" />
-                  <Text style={styles.uploadButtonText}>Take Photo</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.uploadButtonFull} onPress={pickImage}>
+                <Ionicons name="images-outline" size={32} color="#6366f1" />
+                <Text style={styles.uploadButtonText}>Choose from Gallery</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -509,6 +507,23 @@ const styles = StyleSheet.create({
     right: 12,
     padding: 4,
   },
+  pasteUrlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#6366f1',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 12,
+  },
+  pasteUrlButtonText: {
+    color: '#6366f1',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   urlButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -562,6 +577,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 14,
     fontWeight: '500',
+  },
+  uploadButtonFull: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#2a2a2a',
+    borderStyle: 'dashed',
   },
   uploadOptions: {
     flexDirection: 'row',
