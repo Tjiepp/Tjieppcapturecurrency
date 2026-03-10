@@ -10,7 +10,6 @@ import {
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,8 +30,16 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 interface ExtractedInfo {
   name: string;
   price: string;
+  original_price: string;
+  currency: string;
   description: string;
   brand: string;
+  color: string;
+  size: string;
+  material: string;
+  category: string;
+  availability: string;
+  rating: string;
   confidence: number;
 }
 
@@ -42,16 +49,23 @@ export default function CaptureScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
   const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [extractedInfo, setExtractedInfo] = useState<ExtractedInfo | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pageContent, setPageContent] = useState('');
+  const [showForm, setShowForm] = useState(false);
   
-  // Editable fields
+  // Product fields
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
+  const [color, setColor] = useState('');
+  const [size, setSize] = useState('');
+  const [material, setMaterial] = useState('');
+  const [category, setCategory] = useState('');
+  const [availability, setAvailability] = useState('');
+  const [rating, setRating] = useState('');
 
   const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
@@ -67,9 +81,7 @@ export default function CaptureScreen() {
   const extractPageContentJS = `
     (function() {
       try {
-        // Get all text content from the page
         const getTextContent = () => {
-          // Get meta tags
           const metaTags = {};
           document.querySelectorAll('meta').forEach(meta => {
             const name = meta.getAttribute('name') || meta.getAttribute('property');
@@ -77,29 +89,18 @@ export default function CaptureScreen() {
             if (name && content) metaTags[name] = content;
           });
           
-          // Get title
           const title = document.title || '';
-          
-          // Get price - look for common price patterns
-          const priceElements = document.querySelectorAll('[class*="price"], [id*="price"], [data-price], .price, .product-price, .sale-price, .current-price');
+          const priceElements = document.querySelectorAll('[class*="price"], [id*="price"], [data-price], .price, .product-price, .sale-price');
           const prices = Array.from(priceElements).map(el => el.textContent?.trim()).filter(Boolean);
-          
-          // Get product name - look for h1, product title elements
-          const nameElements = document.querySelectorAll('h1, [class*="product-title"], [class*="product-name"], [class*="title"]');
+          const nameElements = document.querySelectorAll('h1, [class*="product-title"], [class*="product-name"]');
           const names = Array.from(nameElements).slice(0, 3).map(el => el.textContent?.trim()).filter(Boolean);
-          
-          // Get description
-          const descElements = document.querySelectorAll('[class*="description"], [class*="details"], [id*="description"], meta[name="description"]');
+          const descElements = document.querySelectorAll('[class*="description"], [class*="details"], meta[name="description"]');
           const descriptions = Array.from(descElements).map(el => el.textContent?.trim() || el.getAttribute('content')).filter(Boolean);
+          const colorElements = document.querySelectorAll('[class*="color"], [class*="colour"], [data-color]');
+          const colors = Array.from(colorElements).map(el => el.textContent?.trim()).filter(Boolean);
+          const sizeElements = document.querySelectorAll('[class*="size"], [data-size], .size-selector');
+          const sizes = Array.from(sizeElements).map(el => el.textContent?.trim()).filter(Boolean);
           
-          // Get brand
-          const brandElements = document.querySelectorAll('[class*="brand"], [data-brand], [itemprop="brand"]');
-          const brands = Array.from(brandElements).map(el => el.textContent?.trim()).filter(Boolean);
-          
-          // Get main content area text
-          const mainContent = document.querySelector('main, [role="main"], .product, .product-detail, #product')?.textContent?.substring(0, 2000) || '';
-          
-          // Get structured data if available
           let structuredData = {};
           const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
           jsonLdScripts.forEach(script => {
@@ -111,16 +112,12 @@ export default function CaptureScreen() {
             } catch(e) {}
           });
           
+          const mainContent = document.querySelector('main, [role="main"], .product, .product-detail')?.textContent?.substring(0, 3000) || '';
+          
           return JSON.stringify({
-            title,
-            metaTags,
-            prices: prices.slice(0, 5),
-            names: names.slice(0, 3),
-            descriptions: descriptions.slice(0, 2),
-            brands: brands.slice(0, 2),
-            mainContent: mainContent.substring(0, 1500),
-            structuredData,
-            url: window.location.href
+            title, metaTags, prices: prices.slice(0, 5), names: names.slice(0, 3),
+            descriptions: descriptions.slice(0, 2), colors: colors.slice(0, 5),
+            sizes: sizes.slice(0, 10), mainContent, structuredData, url: window.location.href
           });
         };
         
@@ -142,7 +139,6 @@ export default function CaptureScreen() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'PAGE_CONTENT') {
-        console.log('Received page content');
         setPageContent(data.content);
       }
     } catch (e) {
@@ -150,7 +146,7 @@ export default function CaptureScreen() {
     }
   };
 
-  const captureScreenshot = async () => {
+  const captureAndAnalyze = async () => {
     if (!viewShotRef.current || !captureRef) {
       Alert.alert('Error', 'WebView not ready');
       return;
@@ -159,14 +155,13 @@ export default function CaptureScreen() {
     try {
       setAnalyzing(true);
       
-      // First, inject JS to extract page content
+      // Inject JS to get latest page content
       if (webViewRef.current) {
         webViewRef.current.injectJavaScript(extractPageContentJS);
-        // Wait a bit for the content to be extracted
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       
-      // Capture the WebView screenshot
+      // Capture screenshot
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
         quality: 0.8,
@@ -176,34 +171,33 @@ export default function CaptureScreen() {
       const base64Image = `data:image/jpeg;base64,${uri}`;
       setScreenshot(base64Image);
 
-      // Send to AI for analysis with both screenshot AND page content
+      // Send to AI
       const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
         screenshot_base64: base64Image,
         url: url,
-        page_content: pageContent, // Include full page content!
+        page_content: pageContent,
       });
 
-      const info = response.data;
-      setExtractedInfo(info);
+      const info: ExtractedInfo = response.data;
       
-      // Populate form with extracted data
+      // Populate form
       setName(info.name || '');
       setPrice(info.price || '');
+      setOriginalPrice(info.original_price || '');
       setDescription(info.description || '');
       setBrand(info.brand || '');
+      setColor(info.color || '');
+      setSize(info.size || '');
+      setMaterial(info.material || '');
+      setCategory(info.category || '');
+      setAvailability(info.availability || '');
+      setRating(info.rating || '');
+      
+      setShowForm(true);
 
-      if (info.confidence < 0.5) {
-        Alert.alert(
-          'Low Confidence',
-          'The AI had difficulty extracting product info. Please review and edit the details.'
-        );
-      }
     } catch (error: any) {
-      console.error('Capture/Analysis error:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.detail || 'Failed to capture and analyze the page.'
-      );
+      console.error('Analysis error:', error);
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to analyze the page.');
     } finally {
       setAnalyzing(false);
     }
@@ -221,25 +215,24 @@ export default function CaptureScreen() {
       await axios.post(`${BACKEND_URL}/api/products`, {
         name: name.trim(),
         price: price.trim(),
+        original_price: originalPrice.trim(),
         description: description.trim(),
         brand: brand.trim(),
+        color: color.trim(),
+        size: size.trim(),
+        material: material.trim(),
+        category: category.trim(),
+        availability: availability.trim(),
+        rating: rating.trim(),
         original_url: url.trim(),
-        image_base64: '',
         screenshot_base64: screenshot || '',
       });
 
-      Alert.alert('Success', 'Product saved successfully!', [
-        {
-          text: 'OK',
-          onPress: () => router.push('/(tabs)/'),
-        },
+      Alert.alert('Saved!', 'Product added to your collection.', [
+        { text: 'OK', onPress: () => router.push('/(tabs)/') },
       ]);
     } catch (error: any) {
-      console.error('Save error:', error);
-      Alert.alert(
-        'Save Failed',
-        error.response?.data?.detail || 'Could not save the product.'
-      );
+      Alert.alert('Error', error.response?.data?.detail || 'Could not save the product.');
     } finally {
       setSaving(false);
     }
@@ -248,35 +241,57 @@ export default function CaptureScreen() {
   const handleLoadEnd = () => {
     setIsLoading(false);
     setPageLoaded(true);
-    // Extract page content when loaded
     if (webViewRef.current) {
       setTimeout(() => {
         webViewRef.current?.injectJavaScript(extractPageContentJS);
-      }, 1000); // Wait for dynamic content to load
+      }, 1000);
     }
   };
 
   const handleLoadStart = () => {
-    setIsLoading(true);
+    setIsLoading(false);
     setPageLoaded(false);
   };
 
-  const loadUrl = () => {
-    if (!url.trim()) {
-      Alert.alert('URL Required', 'Please enter a URL.');
-      return;
-    }
-    if (!url.startsWith('http')) {
-      Alert.alert('Invalid URL', 'URL must start with http:// or https://');
-      return;
-    }
-    setIsLoading(true);
-    setPageLoaded(false);
-    setScreenshot(null);
-    setExtractedInfo(null);
-    // Force WebView to reload
-    webViewRef.current?.reload();
-  };
+  const FormField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
+    <View style={styles.fieldRow}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.fieldInput, multiline && styles.multilineInput]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#6b7280"
+        multiline={multiline}
+      />
+    </View>
+  );
+
+  // Web fallback
+  if (Platform.OS === 'web') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Capture Product</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.webFallback}>
+          <Ionicons name="phone-portrait-outline" size={60} color="#6366f1" />
+          <Text style={styles.webFallbackTitle}>Mobile Feature</Text>
+          <Text style={styles.webFallbackText}>
+            URL capture works on the mobile app. Use "Upload Screenshot" on web instead.
+          </Text>
+          <TouchableOpacity style={styles.goBackButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Text style={styles.goBackButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -286,231 +301,191 @@ export default function CaptureScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Capture Product</Text>
           <View style={{ width: 40 }} />
         </View>
 
-        {/* URL Input */}
-        <View style={styles.urlBar}>
-          <TextInput
-            style={styles.urlInput}
-            value={url}
-            onChangeText={setUrl}
-            placeholder="Enter product URL"
-            placeholderTextColor="#6b7280"
-            autoCapitalize="none"
-            keyboardType="url"
-          />
-          <TouchableOpacity style={styles.goButton} onPress={loadUrl}>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
         <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
-          {/* WebView Container */}
-          {url ? (
+          {/* WebView */}
+          {!showForm ? (
             <View style={styles.webViewSection}>
-              {Platform.OS === 'web' ? (
-                // Web platform fallback - show iframe or message
-                <View style={styles.webFallback}>
-                  <Ionicons name="phone-portrait-outline" size={60} color="#6366f1\" />
-                  <Text style={styles.webFallbackTitle}>Mobile Feature</Text>
-                  <Text style={styles.webFallbackText}>
-                    The URL capture feature with automatic screenshot and AI analysis works on the mobile app.
-                  </Text>
-                  <Text style={styles.webFallbackText}>
-                    On web, you can use the "Upload Screenshot" option instead.
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.goBackButton}
-                    onPress={() => router.back()}
-                  >
-                    <Ionicons name="arrow-back" size={20} color="#fff" />
-                    <Text style={styles.goBackButtonText}>Go Back & Upload Screenshot</Text>
-                  </TouchableOpacity>
-                  
-                  {/* Show a preview iframe for reference */}
-                  <View style={styles.iframeContainer}>
-                    <Text style={styles.previewLabel}>Page Preview (read-only):</Text>
-                    <iframe
-                      src={url}
-                      style={{ width: '100%', height: 300, border: 'none', borderRadius: 12 }}
-                      sandbox="allow-scripts allow-same-origin"
-                    />
+              <View ref={viewShotRef} style={styles.webViewContainer} collapsable={false}>
+                {WebView && (
+                  <WebView
+                    ref={webViewRef}
+                    source={{ uri: url }}
+                    style={styles.webView}
+                    onLoadStart={handleLoadStart}
+                    onLoadEnd={handleLoadEnd}
+                    onMessage={handleWebViewMessage}
+                    onError={() => {
+                      setIsLoading(false);
+                      Alert.alert('Error', 'Failed to load the page.');
+                    }}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
+                    startInLoadingState={true}
+                  />
+                )}
+                {isLoading && (
+                  <View style={styles.loadingOverlay}>
+                    <ActivityIndicator size="large" color="#6366f1" />
+                    <Text style={styles.loadingText}>Loading...</Text>
                   </View>
-                </View>
-              ) : WebView ? (
-                // Native platform - use WebView
-                <>
-                  <View 
-                    ref={viewShotRef} 
-                    style={styles.webViewContainer}
-                    collapsable={false}
-                  >
-                    <WebView
-                      ref={webViewRef}
-                      source={{ uri: url }}
-                      style={styles.webView}
-                      onLoadStart={handleLoadStart}
-                      onLoadEnd={handleLoadEnd}
-                      onMessage={handleWebViewMessage}
-                      onError={(e: any) => {
-                        setIsLoading(false);
-                        Alert.alert('Error', 'Failed to load the page.');
-                      }}
-                      javaScriptEnabled={true}
-                      domStorageEnabled={true}
-                      startInLoadingState={true}
-                      scalesPageToFit={true}
-                      allowsInlineMediaPlayback={true}
-                    />
-                    {isLoading && (
-                      <View style={styles.loadingOverlay}>
-                        <ActivityIndicator size="large" color="#6366f1" />
-                        <Text style={styles.loadingText}>Loading page...</Text>
-                      </View>
-                    )}
-                  </View>
+                )}
+              </View>
 
-                  {/* Status indicator for page content extraction */}
-                  {pageLoaded && (
-                    <View style={styles.statusBar}>
-                      <Ionicons 
-                        name={pageContent ? "checkmark-circle" : "hourglass-outline"} 
-                        size={16} 
-                        color={pageContent ? "#22c55e" : "#f59e0b"} 
-                      />
-                      <Text style={[styles.statusText, { color: pageContent ? "#22c55e" : "#f59e0b" }]}>
-                        {pageContent ? "Full page content extracted" : "Extracting page content..."}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Get Info Button */}
-                  {pageLoaded && !extractedInfo && (
-                    <TouchableOpacity
-                      style={[styles.captureButton, analyzing && styles.disabledButton]}
-                      onPress={captureScreenshot}
-                      disabled={analyzing}
-                    >
-                      {analyzing ? (
-                        <>
-                          <ActivityIndicator color="#fff" size="small" />
-                          <Text style={styles.captureButtonText}>Analyzing full page...</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Ionicons name="sparkles" size={20} color="#fff" />
-                          <Text style={styles.captureButtonText}>Get Info (Full Page)</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>WebView not available</Text>
+              {/* Status */}
+              {pageLoaded && (
+                <View style={styles.statusBar}>
+                  <Ionicons 
+                    name={pageContent ? "checkmark-circle" : "hourglass-outline"} 
+                    size={16} 
+                    color={pageContent ? "#22c55e" : "#f59e0b"} 
+                  />
+                  <Text style={[styles.statusText, { color: pageContent ? "#22c55e" : "#f59e0b" }]}>
+                    {pageContent ? "Ready to capture" : "Loading page data..."}
+                  </Text>
                 </View>
               )}
+
+              {/* Big Capture Button */}
+              {pageLoaded && (
+                <TouchableOpacity
+                  style={[styles.captureButton, analyzing && styles.disabledButton]}
+                  onPress={captureAndAnalyze}
+                  disabled={analyzing}
+                >
+                  {analyzing ? (
+                    <>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={styles.captureButtonText}>Extracting product info...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={24} color="#fff" />
+                      <Text style={styles.captureButtonText}>Get Product Info</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              <Text style={styles.helpText}>
+                Scroll to see the product, then tap the button above to extract all details automatically.
+              </Text>
             </View>
           ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="globe-outline" size={60} color="#4b5563" />
-              <Text style={styles.emptyText}>Enter a URL to capture product info</Text>
-            </View>
-          )}
-
-          {/* Extracted Info Form */}
-          {extractedInfo && (
+            /* Product Form */
             <View style={styles.formSection}>
               <View style={styles.formHeader}>
                 <Text style={styles.formTitle}>Product Details</Text>
-                <View style={styles.confidenceBadge}>
-                  <Text style={styles.confidenceText}>
-                    {Math.round((extractedInfo.confidence || 0) * 100)}% confidence
-                  </Text>
+                <TouchableOpacity onPress={() => setShowForm(false)}>
+                  <Text style={styles.recaptureText}>Re-capture</Text>
+                </TouchableOpacity>
+              </View>
+
+              <FormField label="Name *" value={name} onChangeText={setName} placeholder="Product name" />
+              
+              <View style={styles.priceRow}>
+                <View style={styles.priceField}>
+                  <Text style={styles.fieldLabel}>Price</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={price}
+                    onChangeText={setPrice}
+                    placeholder="$0.00"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+                <View style={styles.priceField}>
+                  <Text style={styles.fieldLabel}>Was</Text>
+                  <TextInput
+                    style={[styles.fieldInput, originalPrice ? styles.strikePrice : null]}
+                    value={originalPrice}
+                    onChangeText={setOriginalPrice}
+                    placeholder="Original"
+                    placeholderTextColor="#6b7280"
+                  />
                 </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Product name"
-                  placeholderTextColor="#6b7280"
-                  value={name}
-                  onChangeText={setName}
-                />
+              <FormField label="Brand" value={brand} onChangeText={setBrand} placeholder="Brand name" />
+              
+              <View style={styles.twoColRow}>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Color</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={color}
+                    onChangeText={setColor}
+                    placeholder="Color"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Size</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={size}
+                    onChangeText={setSize}
+                    placeholder="Size"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Price</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="$0.00"
-                  placeholderTextColor="#6b7280"
-                  value={price}
-                  onChangeText={setPrice}
-                />
+              <FormField label="Material" value={material} onChangeText={setMaterial} placeholder="Material/fabric" />
+              <FormField label="Category" value={category} onChangeText={setCategory} placeholder="Product category" />
+              
+              <View style={styles.twoColRow}>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Availability</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={availability}
+                    onChangeText={setAvailability}
+                    placeholder="In Stock"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Rating</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={rating}
+                    onChangeText={setRating}
+                    placeholder="4.5/5"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Brand</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Brand name"
-                  placeholderTextColor="#6b7280"
-                  value={brand}
-                  onChangeText={setBrand}
-                />
-              </View>
+              <FormField 
+                label="Description" 
+                value={description} 
+                onChangeText={setDescription} 
+                placeholder="Product description" 
+                multiline 
+              />
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Description</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Product description"
-                  placeholderTextColor="#6b7280"
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={() => {
-                    setExtractedInfo(null);
-                    setScreenshot(null);
-                  }}
-                >
-                  <Ionicons name="refresh" size={20} color="#6366f1" />
-                  <Text style={styles.retryButtonText}>Retry</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.saveButton, saving && styles.disabledButton]}
-                  onPress={saveProduct}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Ionicons name="checkmark" size={20} color="#fff" />
-                  )}
-                  <Text style={styles.saveButtonText}>
-                    {saving ? 'Saving...' : 'Save Product'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              {/* Save Button */}
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.disabledButton]}
+                onPress={saveProduct}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
+                )}
+                <Text style={styles.saveButtonText}>
+                  {saving ? 'Saving...' : 'Save Product'}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
@@ -548,39 +523,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  urlBar: {
-    flexDirection: 'row',
-    padding: 12,
-    gap: 10,
-    backgroundColor: '#1a1a1a',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2a2a2a',
-  },
-  urlInput: {
-    flex: 1,
-    backgroundColor: '#262626',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: '#fff',
-    fontSize: 14,
-  },
-  goButton: {
-    backgroundColor: '#6366f1',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   webViewSection: {
     padding: 16,
   },
   webViewContainer: {
-    height: 350,
+    height: 400,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#fff',
-    position: 'relative',
   },
   webView: {
     flex: 1,
@@ -596,40 +546,122 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
   },
+  statusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   captureButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 10,
-    marginTop: 16,
+    paddingVertical: 18,
+    borderRadius: 16,
+    gap: 12,
+    marginTop: 8,
   },
   captureButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
   },
   disabledButton: {
     opacity: 0.7,
   },
-  statusBar: {
+  helpText: {
+    color: '#6b7280',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 20,
+  },
+  formSection: {
+    padding: 16,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  formTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  recaptureText: {
+    color: '#6366f1',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  fieldRow: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    color: '#9ca3af',
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  fieldInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 14,
+    color: '#fff',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+  },
+  multilineInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  priceField: {
+    flex: 1,
+  },
+  strikePrice: {
+    color: '#9ca3af',
+  },
+  twoColRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  halfField: {
+    flex: 1,
+  },
+  saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    gap: 6,
+    backgroundColor: '#22c55e',
+    paddingVertical: 18,
+    borderRadius: 16,
+    gap: 12,
+    marginTop: 16,
   },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '500',
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
   },
   webFallback: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
-    paddingTop: 40,
   },
   webFallbackTitle: {
     fontSize: 22,
@@ -643,7 +675,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 8,
   },
   goBackButton: {
     flexDirection: 'row',
@@ -653,114 +684,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 12,
     gap: 10,
-    marginTop: 20,
-    marginBottom: 24,
+    marginTop: 24,
   },
   goBackButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  iframeContainer: {
-    width: '100%',
-    marginTop: 16,
-  },
-  previewLabel: {
-    color: '#6b7280',
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 80,
-  },
-  emptyText: {
-    color: '#6b7280',
-    fontSize: 16,
-    marginTop: 16,
-  },
-  formSection: {
-    padding: 16,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  formTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  confidenceBadge: {
-    backgroundColor: '#1e3a5f',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  confidenceText: {
-    color: '#60a5fa',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    color: '#9ca3af',
-    fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  input: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 14,
-    color: '#fff',
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1a1a1a',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#6366f1',
-  },
-  retryButtonText: {
-    color: '#6366f1',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  saveButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#22c55e',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  saveButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

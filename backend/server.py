@@ -44,8 +44,16 @@ class Product(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     price: str = ""
+    original_price: str = ""  # Original price before discount
+    currency: str = ""
     description: str = ""
     brand: str = ""
+    color: str = ""
+    size: str = ""
+    material: str = ""
+    category: str = ""
+    availability: str = ""
+    rating: str = ""
     original_url: str = ""
     image_base64: str = ""  # Product image
     screenshot_base64: str = ""  # Original screenshot
@@ -55,8 +63,16 @@ class Product(BaseModel):
 class ProductCreate(BaseModel):
     name: str = ""
     price: str = ""
+    original_price: str = ""
+    currency: str = ""
     description: str = ""
     brand: str = ""
+    color: str = ""
+    size: str = ""
+    material: str = ""
+    category: str = ""
+    availability: str = ""
+    rating: str = ""
     original_url: str = ""
     image_base64: str = ""
     screenshot_base64: str = ""
@@ -64,8 +80,16 @@ class ProductCreate(BaseModel):
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     price: Optional[str] = None
+    original_price: Optional[str] = None
+    currency: Optional[str] = None
     description: Optional[str] = None
     brand: Optional[str] = None
+    color: Optional[str] = None
+    size: Optional[str] = None
+    material: Optional[str] = None
+    category: Optional[str] = None
+    availability: Optional[str] = None
+    rating: Optional[str] = None
     original_url: Optional[str] = None
     image_base64: Optional[str] = None
 
@@ -80,8 +104,16 @@ class AnalyzeURLRequest(BaseModel):
 class ExtractedProductInfo(BaseModel):
     name: str = ""
     price: str = ""
+    original_price: str = ""
+    currency: str = ""
     description: str = ""
     brand: str = ""
+    color: str = ""
+    size: str = ""
+    material: str = ""
+    category: str = ""
+    availability: str = ""
+    rating: str = ""
     confidence: float = 0.0
 
 # AI Analysis Function
@@ -97,9 +129,9 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
             api_key=EMERGENT_LLM_KEY,
             session_id=f"product-analysis-{uuid.uuid4()}",
             system_message="""You are a product information extraction expert. 
-            Analyze product screenshots and page content to extract structured information.
+            Analyze product screenshots and page content to extract ALL available product details.
             Always respond with valid JSON only, no other text.
-            Extract product details accurately from all available sources."""
+            Be thorough - extract every detail you can find."""
         ).with_model("openai", "gpt-5.2")
         
         # Create image content
@@ -108,35 +140,43 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
         # Build comprehensive prompt with page content if available
         page_context = ""
         if page_content:
-            # Truncate if too long (keep first 4000 chars)
-            truncated_content = page_content[:4000] if len(page_content) > 4000 else page_content
+            # Truncate if too long (keep first 5000 chars)
+            truncated_content = page_content[:5000] if len(page_content) > 5000 else page_content
             page_context = f"""
-            
-FULL PAGE CONTENT (extracted from entire page, not just visible area):
+
+FULL PAGE CONTENT (extracted from entire page):
 {truncated_content}
 """
         
-        prompt = f"""Analyze this product page and extract the following information.
-        
+        prompt = f"""Analyze this product page and extract ALL available information.
+
 Product URL: {url if url else 'Not provided'}
 {page_context}
 
-I'm also providing a screenshot of the visible portion. Use BOTH the page content AND the screenshot to extract accurate product information.
-
-Return ONLY a valid JSON object with these exact fields:
+Extract as much detail as possible. Return ONLY a valid JSON object with these fields:
 {{
-    "name": "Full product name",
-    "price": "Price including currency symbol (e.g., $29.99). Look for sale price, current price, or listed price.",
-    "description": "Product description (max 250 chars). Summarize key features.",
-    "brand": "Brand name",
-    "confidence": 0.0 to 1.0 based on how complete the extraction was
+    "name": "Full product name/title",
+    "price": "Current/sale price with currency (e.g., $29.99, €19,99)",
+    "original_price": "Original price before discount, if shown (empty if no discount)",
+    "currency": "Currency code (USD, EUR, GBP, etc.)",
+    "description": "Product description - key features and details (max 300 chars)",
+    "brand": "Brand/manufacturer name",
+    "color": "Color(s) available or selected",
+    "size": "Size(s) available or selected (S/M/L, dimensions, capacity, etc.)",
+    "material": "Material/fabric composition if mentioned",
+    "category": "Product category (e.g., Electronics, Clothing, Home & Garden)",
+    "availability": "In Stock, Out of Stock, Limited, Pre-order, etc.",
+    "rating": "Star rating and review count if shown (e.g., 4.5/5 (234 reviews))",
+    "confidence": 0.0 to 1.0 based on extraction completeness
 }}
 
-IMPORTANT: 
-- Extract info from the FULL PAGE CONTENT, not just what's visible in the screenshot
-- Look for price in various formats: $XX.XX, €XX,XX, £XX.XX, etc.
-- If multiple prices exist, prefer the sale/current price over original price
-- Return ONLY the JSON, no explanation or markdown."""
+RULES:
+- Extract from BOTH the page content AND screenshot
+- Use empty string "" for any field you cannot find
+- For price, prefer sale/current price over original
+- For size/color, list what's shown or selected
+- Be specific with category (not just "Product")
+- Return ONLY valid JSON, no markdown or explanation."""
         
         # Send message with image
         user_message = UserMessage(
@@ -148,8 +188,8 @@ IMPORTANT:
         logger.info(f"AI Response: {response}")
         
         # Parse JSON response
-        # Try to extract JSON from the response
-        json_match = re.search(r'\{[^{}]*\}', response, re.DOTALL)
+        # Try to extract JSON from the response - handle nested objects
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response, re.DOTALL)
         if json_match:
             result = json.loads(json_match.group())
         else:
@@ -158,8 +198,16 @@ IMPORTANT:
         return {
             "name": result.get("name", ""),
             "price": result.get("price", ""),
+            "original_price": result.get("original_price", ""),
+            "currency": result.get("currency", ""),
             "description": result.get("description", ""),
             "brand": result.get("brand", ""),
+            "color": result.get("color", ""),
+            "size": result.get("size", ""),
+            "material": result.get("material", ""),
+            "category": result.get("category", ""),
+            "availability": result.get("availability", ""),
+            "rating": result.get("rating", ""),
             "confidence": float(result.get("confidence", 0.5))
         }
         
@@ -168,8 +216,16 @@ IMPORTANT:
         return {
             "name": "",
             "price": "",
+            "original_price": "",
+            "currency": "",
             "description": "Could not parse AI response",
             "brand": "",
+            "color": "",
+            "size": "",
+            "material": "",
+            "category": "",
+            "availability": "",
+            "rating": "",
             "confidence": 0.0
         }
     except Exception as e:

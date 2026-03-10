@@ -24,8 +24,13 @@ interface Product {
   id: string;
   name: string;
   price: string;
+  original_price: string;
   description: string;
   brand: string;
+  color: string;
+  size: string;
+  category: string;
+  availability: string;
   original_url: string;
   image_base64: string;
   screenshot_base64: string;
@@ -109,6 +114,11 @@ export default function ProductsScreen() {
           >
             <Ionicons name="trash-outline" size={16} color="#ef4444" />
           </TouchableOpacity>
+          {item.original_price ? (
+            <View style={styles.saleBadge}>
+              <Text style={styles.saleText}>SALE</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.productInfo}>
           <Text style={styles.productName} numberOfLines={2}>
@@ -117,9 +127,19 @@ export default function ProductsScreen() {
           {item.brand ? (
             <Text style={styles.productBrand}>{item.brand}</Text>
           ) : null}
-          <Text style={styles.productPrice}>
-            {item.price || 'Price N/A'}
-          </Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.productPrice}>
+              {item.price || 'Price N/A'}
+            </Text>
+            {item.original_price ? (
+              <Text style={styles.originalPrice}>{item.original_price}</Text>
+            ) : null}
+          </View>
+          {(item.color || item.size) ? (
+            <Text style={styles.productMeta} numberOfLines={1}>
+              {[item.color, item.size].filter(Boolean).join(' • ')}
+            </Text>
+          ) : null}
         </View>
       </TouchableOpacity>
     );
@@ -247,6 +267,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 8,
   },
+  saleBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#ef4444',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  saleText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   productInfo: {
     padding: 12,
   },
@@ -261,10 +295,25 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginBottom: 4,
   },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   productPrice: {
     fontSize: 16,
     fontWeight: '700',
     color: '#6366f1',
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
+  },
+  productMeta: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 4,
   },
   emptyContainer: {
     flex: 1,

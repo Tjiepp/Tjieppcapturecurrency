@@ -24,8 +24,16 @@ interface Product {
   id: string;
   name: string;
   price: string;
+  original_price: string;
+  currency: string;
   description: string;
   brand: string;
+  color: string;
+  size: string;
+  material: string;
+  category: string;
+  availability: string;
+  rating: string;
   original_url: string;
   image_base64: string;
   screenshot_base64: string;
@@ -43,8 +51,15 @@ export default function ProductDetailScreen() {
   // Edit fields
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
+  const [color, setColor] = useState('');
+  const [size, setSize] = useState('');
+  const [material, setMaterial] = useState('');
+  const [category, setCategory] = useState('');
+  const [availability, setAvailability] = useState('');
+  const [rating, setRating] = useState('');
 
   useEffect(() => {
     fetchProduct();
@@ -53,11 +68,19 @@ export default function ProductDetailScreen() {
   const fetchProduct = async () => {
     try {
       const response = await axios.get(`${BACKEND_URL}/api/products/${id}`);
-      setProduct(response.data);
-      setName(response.data.name);
-      setPrice(response.data.price);
-      setDescription(response.data.description);
-      setBrand(response.data.brand);
+      const p = response.data;
+      setProduct(p);
+      setName(p.name || '');
+      setPrice(p.price || '');
+      setOriginalPrice(p.original_price || '');
+      setDescription(p.description || '');
+      setBrand(p.brand || '');
+      setColor(p.color || '');
+      setSize(p.size || '');
+      setMaterial(p.material || '');
+      setCategory(p.category || '');
+      setAvailability(p.availability || '');
+      setRating(p.rating || '');
     } catch (error) {
       console.error('Error fetching product:', error);
       Alert.alert('Error', 'Could not load product details');
@@ -79,43 +102,43 @@ export default function ProductDetailScreen() {
       const response = await axios.put(`${BACKEND_URL}/api/products/${id}`, {
         name: name.trim(),
         price: price.trim(),
+        original_price: originalPrice.trim(),
         description: description.trim(),
         brand: brand.trim(),
+        color: color.trim(),
+        size: size.trim(),
+        material: material.trim(),
+        category: category.trim(),
+        availability: availability.trim(),
+        rating: rating.trim(),
       });
 
       setProduct(response.data);
       setEditing(false);
-      Alert.alert('Success', 'Product updated successfully!');
+      Alert.alert('Saved', 'Product updated successfully!');
     } catch (error: any) {
-      Alert.alert(
-        'Update Failed',
-        error.response?.data?.detail || 'Could not update product.'
-      );
+      Alert.alert('Error', error.response?.data?.detail || 'Could not update product.');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Product',
-      'Are you sure you want to delete this product?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(`${BACKEND_URL}/api/products/${id}`);
-              router.back();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete product');
-            }
-          },
+    Alert.alert('Delete Product', 'Are you sure you want to delete this product?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await axios.delete(`${BACKEND_URL}/api/products/${id}`);
+            router.back();
+          } catch (error) {
+            Alert.alert('Error', 'Failed to delete product');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const openURL = () => {
@@ -126,12 +149,37 @@ export default function ProductDetailScreen() {
     }
   };
 
+  const DetailRow = ({ icon, label, value }: { icon: string; label: string; value: string }) => {
+    if (!value) return null;
+    return (
+      <View style={styles.detailRow}>
+        <Ionicons name={icon as any} size={18} color="#6b7280" />
+        <Text style={styles.detailLabel}>{label}:</Text>
+        <Text style={styles.detailValue}>{value}</Text>
+      </View>
+    );
+  };
+
+  const EditField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
+    <View style={styles.editField}>
+      <Text style={styles.editLabel}>{label}</Text>
+      <TextInput
+        style={[styles.editInput, multiline && styles.multilineInput]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#6b7280"
+        multiline={multiline}
+      />
+    </View>
+  );
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={styles.loadingText}>Loading product...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
@@ -163,35 +211,21 @@ export default function ProductDetailScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            Product Details
-          </Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>Product Details</Text>
           <View style={styles.headerActions}>
             {editing ? (
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={() => setEditing(false)}
-              >
+              <TouchableOpacity style={styles.headerBtn} onPress={() => setEditing(false)}>
                 <Ionicons name="close" size={24} color="#9ca3af" />
               </TouchableOpacity>
             ) : (
               <>
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={() => setEditing(true)}
-                >
+                <TouchableOpacity style={styles.headerBtn} onPress={() => setEditing(true)}>
                   <Ionicons name="pencil" size={22} color="#6366f1" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={handleDelete}
-                >
+                <TouchableOpacity style={styles.headerBtn} onPress={handleDelete}>
                   <Ionicons name="trash-outline" size={22} color="#ef4444" />
                 </TouchableOpacity>
               </>
@@ -199,122 +233,110 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Screenshot */}
+        <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
+          {/* Image */}
           {imageSource && (
             <View style={styles.imageContainer}>
-              <Image
-                source={imageSource}
-                style={styles.productImage}
-                resizeMode="contain"
-              />
+              <Image source={imageSource} style={styles.productImage} resizeMode="contain" />
             </View>
           )}
 
-          {/* Product Info */}
-          <View style={styles.infoContainer}>
-            {editing ? (
-              <>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Name</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Product name"
-                    placeholderTextColor="#6b7280"
-                  />
+          {editing ? (
+            /* Edit Mode */
+            <View style={styles.editSection}>
+              <EditField label="Name *" value={name} onChangeText={setName} placeholder="Product name" />
+              
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <EditField label="Price" value={price} onChangeText={setPrice} placeholder="$0.00" />
                 </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Price</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={price}
-                    onChangeText={setPrice}
-                    placeholder="$0.00"
-                    placeholderTextColor="#6b7280"
-                  />
+                <View style={styles.halfField}>
+                  <EditField label="Original Price" value={originalPrice} onChangeText={setOriginalPrice} placeholder="Was" />
                 </View>
+              </View>
 
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Brand</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={brand}
-                    onChangeText={setBrand}
-                    placeholder="Brand name"
-                    placeholderTextColor="#6b7280"
-                  />
+              <EditField label="Brand" value={brand} onChangeText={setBrand} placeholder="Brand" />
+              
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <EditField label="Color" value={color} onChangeText={setColor} placeholder="Color" />
                 </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Description</Text>
-                  <TextInput
-                    style={[styles.input, styles.textArea]}
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder="Description"
-                    placeholderTextColor="#6b7280"
-                    multiline
-                    numberOfLines={4}
-                  />
+                <View style={styles.halfField}>
+                  <EditField label="Size" value={size} onChangeText={setSize} placeholder="Size" />
                 </View>
+              </View>
 
-                <TouchableOpacity
-                  style={[styles.saveButton, saving && styles.disabledButton]}
-                  onPress={handleSave}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Ionicons name="checkmark" size={20} color="#fff" />
-                  )}
-                  <Text style={styles.saveButtonText}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={styles.productName}>{product.name || 'Unnamed Product'}</Text>
-                
-                {product.brand ? (
-                  <Text style={styles.productBrand}>{product.brand}</Text>
-                ) : null}
-                
+              <EditField label="Material" value={material} onChangeText={setMaterial} placeholder="Material" />
+              <EditField label="Category" value={category} onChangeText={setCategory} placeholder="Category" />
+              
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <EditField label="Availability" value={availability} onChangeText={setAvailability} placeholder="In Stock" />
+                </View>
+                <View style={styles.halfField}>
+                  <EditField label="Rating" value={rating} onChangeText={setRating} placeholder="4.5/5" />
+                </View>
+              </View>
+
+              <EditField label="Description" value={description} onChangeText={setDescription} placeholder="Description" multiline />
+
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.disabledButton]}
+                onPress={handleSave}
+                disabled={saving}
+              >
+                {saving ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark" size={20} color="#fff" />}
+                <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* View Mode */
+            <View style={styles.infoSection}>
+              <Text style={styles.productName}>{product.name || 'Unnamed Product'}</Text>
+              
+              {product.brand ? <Text style={styles.productBrand}>{product.brand}</Text> : null}
+              
+              <View style={styles.priceContainer}>
                 <Text style={styles.productPrice}>{product.price || 'Price N/A'}</Text>
-                
-                {product.description ? (
-                  <View style={styles.descriptionContainer}>
-                    <Text style={styles.descriptionLabel}>Description</Text>
-                    <Text style={styles.productDescription}>{product.description}</Text>
-                  </View>
+                {product.original_price ? (
+                  <Text style={styles.originalPrice}>{product.original_price}</Text>
                 ) : null}
+              </View>
 
-                {product.original_url ? (
-                  <TouchableOpacity style={styles.urlButton} onPress={openURL}>
-                    <Ionicons name="link-outline" size={20} color="#6366f1" />
-                    <Text style={styles.urlButtonText} numberOfLines={1}>
-                      {product.original_url}
-                    </Text>
-                    <Ionicons name="open-outline" size={18} color="#6366f1" />
-                  </TouchableOpacity>
-                ) : null}
+              {/* Quick Details */}
+              <View style={styles.detailsCard}>
+                <DetailRow icon="color-palette-outline" label="Color" value={product.color} />
+                <DetailRow icon="resize-outline" label="Size" value={product.size} />
+                <DetailRow icon="layers-outline" label="Material" value={product.material} />
+                <DetailRow icon="pricetag-outline" label="Category" value={product.category} />
+                <DetailRow icon="checkmark-circle-outline" label="Availability" value={product.availability} />
+                <DetailRow icon="star-outline" label="Rating" value={product.rating} />
+              </View>
 
-                <View style={styles.metaContainer}>
-                  <Text style={styles.metaText}>
-                    Added: {new Date(product.created_at).toLocaleDateString()}
-                  </Text>
+              {/* Description */}
+              {product.description ? (
+                <View style={styles.descriptionCard}>
+                  <Text style={styles.descriptionLabel}>Description</Text>
+                  <Text style={styles.descriptionText}>{product.description}</Text>
                 </View>
-              </>
-            )}
-          </View>
+              ) : null}
+
+              {/* URL */}
+              {product.original_url ? (
+                <TouchableOpacity style={styles.urlButton} onPress={openURL}>
+                  <Ionicons name="link-outline" size={20} color="#6366f1" />
+                  <Text style={styles.urlText} numberOfLines={1}>{product.original_url}</Text>
+                  <Ionicons name="open-outline" size={18} color="#6366f1" />
+                </TouchableOpacity>
+              ) : null}
+
+              <View style={styles.metaInfo}>
+                <Text style={styles.metaText}>
+                  Added: {new Date(product.created_at).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -363,7 +385,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  headerButton: {
+  headerBtn: {
     padding: 8,
   },
   scrollContent: {
@@ -377,42 +399,74 @@ const styles = StyleSheet.create({
   },
   productImage: {
     width: '100%',
-    height: 280,
+    height: 260,
   },
-  infoContainer: {
+  infoSection: {
     paddingHorizontal: 16,
   },
   productName: {
     fontSize: 24,
     fontWeight: '700',
     color: '#fff',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   productBrand: {
     fontSize: 16,
     color: '#9ca3af',
     marginBottom: 12,
   },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
   productPrice: {
     fontSize: 28,
     fontWeight: '700',
     color: '#6366f1',
-    marginBottom: 20,
   },
-  descriptionContainer: {
+  originalPrice: {
+    fontSize: 18,
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
+  },
+  detailsCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+  },
+  detailLabel: {
+    color: '#9ca3af',
+    fontSize: 14,
+    width: 90,
+  },
+  detailValue: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+  },
+  descriptionCard: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
   },
   descriptionLabel: {
-    fontSize: 14,
     color: '#6b7280',
+    fontSize: 14,
     marginBottom: 8,
   },
-  productDescription: {
-    fontSize: 15,
+  descriptionText: {
     color: '#d1d5db',
+    fontSize: 15,
     lineHeight: 22,
   },
   urlButton: {
@@ -424,12 +478,12 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 16,
   },
-  urlButtonText: {
+  urlText: {
     flex: 1,
     color: '#6366f1',
     fontSize: 14,
   },
-  metaContainer: {
+  metaInfo: {
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#1f1f1f',
@@ -438,27 +492,37 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 13,
   },
-  formGroup: {
+  editSection: {
+    padding: 16,
+  },
+  editField: {
     marginBottom: 16,
   },
-  label: {
+  editLabel: {
     color: '#9ca3af',
-    fontSize: 14,
-    marginBottom: 8,
+    fontSize: 13,
+    marginBottom: 6,
     fontWeight: '500',
   },
-  input: {
+  editInput: {
     backgroundColor: '#1a1a1a',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 14,
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
     borderWidth: 1,
     borderColor: '#2a2a2a',
   },
-  textArea: {
+  multilineInput: {
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  rowFields: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfField: {
+    flex: 1,
   },
   saveButton: {
     flexDirection: 'row',
