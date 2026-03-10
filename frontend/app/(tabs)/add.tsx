@@ -267,14 +267,24 @@ export default function AddProductScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            <TouchableOpacity 
-              style={[styles.getInfoButton, !url && styles.disabledButton]}
-              onPress={handleGetInfoFromUrl}
-              disabled={!url}
-            >
-              <Ionicons name="globe-outline" size={20} color="#fff" />
-              <Text style={styles.getInfoButtonText}>Get Info from URL</Text>
-            </TouchableOpacity>
+            <View style={styles.urlButtonsRow}>
+              <TouchableOpacity 
+                style={[styles.getInfoButton, !url && styles.disabledButton]}
+                onPress={handleGetInfoFromUrl}
+                disabled={!url}
+              >
+                <Ionicons name="globe-outline" size={20} color="#fff" />
+                <Text style={styles.getInfoButtonText}>Get Info from URL</Text>
+              </TouchableOpacity>
+              {url.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.deleteUrlButton}
+                  onPress={() => setUrl('')}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                </TouchableOpacity>
+              )}
+            </View>
             <Text style={styles.hintText}>
               Tip: Share a URL from any app to auto-fill this field
             </Text>
@@ -499,7 +509,14 @@ const styles = StyleSheet.create({
     right: 12,
     padding: 4,
   },
+  urlButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
   getInfoButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -507,12 +524,20 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     gap: 10,
-    marginTop: 12,
   },
   getInfoButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  deleteUrlButton: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hintText: {
     color: '#6b7280',
