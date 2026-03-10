@@ -258,10 +258,19 @@ export default function AddProductScreen() {
                 autoCapitalize="none"
                 keyboardType="url"
               />
+              {url.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.clearUrlButton}
+                  onPress={() => setUrl('')}
+                >
+                  <Ionicons name="close-circle" size={22} color="#6b7280" />
+                </TouchableOpacity>
+              )}
             </View>
             <TouchableOpacity 
-              style={styles.getInfoButton}
+              style={[styles.getInfoButton, !url && styles.disabledButton]}
               onPress={handleGetInfoFromUrl}
+              disabled={!url}
             >
               <Ionicons name="globe-outline" size={20} color="#fff" />
               <Text style={styles.getInfoButtonText}>Get Info from URL</Text>
@@ -471,17 +480,24 @@ const styles = StyleSheet.create({
   },
   urlInputRow: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    position: 'relative',
   },
   urlInput: {
     flex: 1,
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 16,
+    paddingRight: 44,
     color: '#fff',
     fontSize: 15,
     borderWidth: 1,
     borderColor: '#2a2a2a',
+  },
+  clearUrlButton: {
+    position: 'absolute',
+    right: 12,
+    padding: 4,
   },
   getInfoButton: {
     flexDirection: 'row',
