@@ -228,9 +228,8 @@ export default function CaptureScreen() {
         screenshot_base64: screenshot || '',
       });
 
-      Alert.alert('Saved!', 'Product added to your collection.', [
-        { text: 'OK', onPress: () => router.push('/(tabs)/') },
-      ]);
+      // Navigate back to products list without alert
+      router.push('/(tabs)/');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Could not save the product.');
     } finally {
