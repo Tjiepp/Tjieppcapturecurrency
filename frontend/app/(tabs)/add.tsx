@@ -97,11 +97,15 @@ export default function AddProductScreen() {
       if (clipboardContent) {
         if (clipboardContent.startsWith('http')) {
           // Set URL and automatically navigate to capture screen
-          setUrl(clipboardContent);
-          router.push({
-            pathname: '/capture',
-            params: { url: clipboardContent.trim() }
-          });
+          const trimmedUrl = clipboardContent.trim();
+          setUrl(trimmedUrl);
+          // Small delay to ensure state is set, then navigate
+          setTimeout(() => {
+            router.push({
+              pathname: '/capture',
+              params: { url: trimmedUrl }
+            });
+          }, 100);
         } else {
           Alert.alert('Invalid URL', 'Clipboard does not contain a valid URL (must start with http:// or https://)');
         }
