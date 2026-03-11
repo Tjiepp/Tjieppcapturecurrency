@@ -252,25 +252,6 @@ export default function AddProductScreen() {
                   {/* URL Section */}
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Product URL</Text>
-                    <View style={styles.urlInputRow}>
-                      <TextInput
-                        style={styles.urlInput}
-                        placeholder="https://amazon.com/product..."
-                        placeholderTextColor="#6b7280"
-                        value={url}
-                        onChangeText={setUrl}
-                        autoCapitalize="none"
-                        keyboardType="url"
-                      />
-                      {url.length > 0 && (
-                        <TouchableOpacity 
-                          style={styles.clearUrlButton}
-                          onPress={() => setUrl('')}
-                        >
-                          <Ionicons name="close-circle" size={22} color="#6b7280" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
                     
                     <TouchableOpacity 
                       style={styles.mainButton}
@@ -279,16 +260,6 @@ export default function AddProductScreen() {
                       <Ionicons name="add-circle-outline" size={22} color="#fff" />
                       <Text style={styles.mainButtonText}>Add to my Tjiepp</Text>
                     </TouchableOpacity>
-
-                    {url.length > 0 && (
-                      <TouchableOpacity 
-                        style={styles.clearButton}
-                        onPress={() => setUrl('')}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                        <Text style={styles.clearButtonText}>Clear URL</Text>
-                      </TouchableOpacity>
-                    )}
                     
                     <Text style={styles.hintText}>
                       Copy a product URL, then tap "Add to my Tjiepp"
