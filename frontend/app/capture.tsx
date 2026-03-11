@@ -62,6 +62,7 @@ export default function CaptureScreen() {
   const [brand, setBrand] = useState('');
   const [color, setColor] = useState('');
   const [size, setSize] = useState('');
+  const [quantity, setQuantity] = useState('1');
   const [material, setMaterial] = useState('');
   const [category, setCategory] = useState('');
   const [availability, setAvailability] = useState('');
@@ -267,6 +268,7 @@ export default function CaptureScreen() {
         brand: brand.trim(),
         color: color.trim(),
         size: size.trim(),
+        quantity: parseInt(quantity) || 1,
         material: material.trim(),
         category: category.trim(),
         availability: availability.trim(),
@@ -498,6 +500,32 @@ export default function CaptureScreen() {
                 </View>
               </View>
 
+              {/* Quantity Field */}
+              <View style={styles.quantityRow}>
+                <Text style={styles.fieldLabel}>Quantity</Text>
+                <View style={styles.quantityControl}>
+                  <TouchableOpacity 
+                    style={styles.quantityButton}
+                    onPress={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
+                  >
+                    <Ionicons name="remove" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.quantityInput}
+                    value={quantity}
+                    onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, '') || '1')}
+                    keyboardType="number-pad"
+                    textAlign="center"
+                  />
+                  <TouchableOpacity 
+                    style={styles.quantityButton}
+                    onPress={() => setQuantity((parseInt(quantity) + 1).toString())}
+                  >
+                    <Ionicons name="add" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <FormField label="Material" value={material} onChangeText={setMaterial} placeholder="Material/fabric" />
               <FormField label="Category" value={category} onChangeText={setCategory} placeholder="Product category" />
               
@@ -720,6 +748,34 @@ const styles = StyleSheet.create({
   },
   halfField: {
     flex: 1,
+  },
+  quantityRow: {
+    marginBottom: 16,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quantityButton: {
+    backgroundColor: '#6366f1',
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 14,
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    width: 80,
+    textAlign: 'center',
   },
   saveButton: {
     flexDirection: 'row',

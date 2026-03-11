@@ -50,6 +50,7 @@ class Product(BaseModel):
     brand: str = ""
     color: str = ""
     size: str = ""
+    quantity: int = 1  # Default quantity
     material: str = ""
     category: str = ""
     availability: str = ""
@@ -69,6 +70,7 @@ class ProductCreate(BaseModel):
     brand: str = ""
     color: str = ""
     size: str = ""
+    quantity: int = 1
     material: str = ""
     category: str = ""
     availability: str = ""
@@ -86,6 +88,7 @@ class ProductUpdate(BaseModel):
     brand: Optional[str] = None
     color: Optional[str] = None
     size: Optional[str] = None
+    quantity: Optional[int] = None
     material: Optional[str] = None
     category: Optional[str] = None
     availability: Optional[str] = None

@@ -29,6 +29,7 @@ interface Product {
   brand: string;
   color: string;
   size: string;
+  quantity: number;
   category: string;
   availability: string;
   original_url: string;
@@ -117,6 +118,11 @@ export default function ProductsScreen() {
           {item.original_price ? (
             <View style={styles.saleBadge}>
               <Text style={styles.saleText}>SALE</Text>
+            </View>
+          ) : null}
+          {item.quantity && item.quantity > 1 ? (
+            <View style={styles.quantityBadge}>
+              <Text style={styles.quantityBadgeText}>x{item.quantity}</Text>
             </View>
           ) : null}
         </View>
@@ -291,6 +297,20 @@ const styles = StyleSheet.create({
   saleText: {
     color: '#fff',
     fontSize: 10,
+    fontWeight: '700',
+  },
+  quantityBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: '#6366f1',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  quantityBadgeText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '700',
   },
   productInfo: {
