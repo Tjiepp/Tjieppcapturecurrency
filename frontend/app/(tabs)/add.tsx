@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Keyboard,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,28 +22,30 @@ import { router } from 'expo-router';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
-interface ExtractedInfo {
-  name: string;
-  price: string;
-  description: string;
-  brand: string;
-  confidence: number;
-}
-
 export default function AddProductScreen() {
   const [url, setUrl] = useState('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [extractedInfo, setExtractedInfo] = useState<ExtractedInfo | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   
-  // Editable fields
+  // Product fields
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
+  const [color, setColor] = useState('');
+  const [size, setSize] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [material, setMaterial] = useState('');
+  const [category, setCategory] = useState('');
+  const [availability, setAvailability] = useState('');
+  const [rating, setRating] = useState('');
+  const [productImageUrl, setProductImageUrl] = useState('');
 
-  const pickImage = async () => {
+  const pickImageAndAnalyze = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
@@ -64,31 +66,50 @@ export default function AddProductScreen() {
     if (!result.canceled && result.assets[0].base64) {
       const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
       setScreenshot(base64Image);
-      setExtractedInfo(null);
-      // Reset form
-      setName('');
-      setPrice('');
-      setDescription('');
-      setBrand('');
-    }
-  };
+      
+      // Auto-analyze the screenshot
+      setAnalyzing(true);
+      
+      try {
+        const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
+          screenshot_base64: base64Image,
+          url: '',
+          page_content: '',
+        });
 
-  const handleGetInfoFromUrl = () => {
-    if (!url.trim()) {
-      Alert.alert('URL Required', 'Please enter a product URL first.');
-      return;
-    }
+        const info = response.data;
+        
+        // Populate form with extracted data
+        setName(info.name || '');
+        setPrice(info.price || '');
+        setOriginalPrice(info.original_price || '');
+        setDescription(info.description || '');
+        setBrand(info.brand || '');
+        setColor(info.color || '');
+        setSize(info.size || '');
+        setMaterial(info.material || '');
+        setCategory(info.category || '');
+        setAvailability(info.availability || '');
+        setRating(info.rating || '');
+        
+        setShowForm(true);
 
-    if (!url.startsWith('http')) {
-      Alert.alert('Invalid URL', 'Please enter a valid URL starting with http:// or https://');
-      return;
+        if (info.confidence < 0.5) {
+          Alert.alert(
+            'Low Confidence',
+            'The AI had difficulty extracting product info. Please review and edit the details.'
+          );
+        }
+      } catch (error: any) {
+        console.error('Analysis error:', error);
+        Alert.alert(
+          'Analysis Failed',
+          error.response?.data?.detail || 'Could not analyze the screenshot. Please try again.'
+        );
+      } finally {
+        setAnalyzing(false);
+      }
     }
-
-    // Navigate to capture screen with the URL
-    router.push({
-      pathname: '/capture',
-      params: { url: url.trim() }
-    });
   };
 
   const pasteFromClipboard = async () => {
@@ -96,7 +117,6 @@ export default function AddProductScreen() {
       const clipboardContent = await Clipboard.getStringAsync();
       if (clipboardContent) {
         if (clipboardContent.startsWith('http')) {
-          // Navigate directly to capture screen with the URL
           const trimmedUrl = clipboardContent.trim();
           router.push(`/capture?url=${encodeURIComponent(trimmedUrl)}`);
         } else {
@@ -110,111 +130,83 @@ export default function AddProductScreen() {
     }
   };
 
-  const analyzeScreenshot = async () => {
-    if (!screenshot) {
-      Alert.alert('No Screenshot', 'Please upload or take a screenshot first.');
-      return;
-    }
-
-    setLoading(true);
-    Keyboard.dismiss();
-
-    try {
-      const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
-        screenshot_base64: screenshot,
-        url: url,
-      });
-
-      const info = response.data;
-      setExtractedInfo(info);
-      
-      // Populate form with extracted data
-      setName(info.name || '');
-      setPrice(info.price || '');
-      setDescription(info.description || '');
-      setBrand(info.brand || '');
-
-      if (info.confidence < 0.5) {
-        Alert.alert(
-          'Low Confidence',
-          'The AI had difficulty extracting product info. Please review and edit the details.'
-        );
-      }
-    } catch (error: any) {
-      console.error('Analysis error:', error);
-      Alert.alert(
-        'Analysis Failed',
-        error.response?.data?.detail || 'Could not analyze the screenshot. Please try again.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveProduct = async () => {
+  const handleSavePress = () => {
     if (!name.trim()) {
       Alert.alert('Name Required', 'Please enter a product name.');
       return;
     }
+    setShowConfirmModal(true);
+  };
 
+  const confirmSave = async () => {
+    setShowConfirmModal(false);
     setSaving(true);
 
     try {
       await axios.post(`${BACKEND_URL}/api/products`, {
         name: name.trim(),
         price: price.trim(),
+        original_price: originalPrice.trim(),
         description: description.trim(),
         brand: brand.trim(),
-        original_url: url.trim(),
-        image_base64: '',
+        color: color.trim(),
+        size: size.trim(),
+        quantity: parseInt(quantity) || 1,
+        material: material.trim(),
+        category: category.trim(),
+        availability: availability.trim(),
+        rating: rating.trim(),
+        original_url: '',
+        image_base64: productImageUrl || '',
         screenshot_base64: screenshot || '',
       });
 
-      Alert.alert('Success', 'Product saved successfully!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Reset form
-            setUrl('');
-            setScreenshot(null);
-            setExtractedInfo(null);
-            setName('');
-            setPrice('');
-            setDescription('');
-            setBrand('');
-            router.push('/(tabs)/');
-          },
-        },
-      ]);
+      // Reset and go to products list
+      resetForm();
+      router.push('/(tabs)/');
     } catch (error: any) {
-      console.error('Save error:', error);
-      Alert.alert(
-        'Save Failed',
-        error.response?.data?.detail || 'Could not save the product. Please try again.'
-      );
+      Alert.alert('Error', error.response?.data?.detail || 'Could not save the product.');
     } finally {
       setSaving(false);
     }
   };
 
-  const clearForm = () => {
-    Alert.alert('Clear Form', 'Are you sure you want to clear all data?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          setUrl('');
-          setScreenshot(null);
-          setExtractedInfo(null);
-          setName('');
-          setPrice('');
-          setDescription('');
-          setBrand('');
-        },
-      },
-    ]);
+  const handleRecapture = () => {
+    setShowConfirmModal(false);
+    resetForm();
   };
+
+  const resetForm = () => {
+    setScreenshot(null);
+    setShowForm(false);
+    setName('');
+    setPrice('');
+    setOriginalPrice('');
+    setDescription('');
+    setBrand('');
+    setColor('');
+    setSize('');
+    setQuantity('1');
+    setMaterial('');
+    setCategory('');
+    setAvailability('');
+    setRating('');
+    setProductImageUrl('');
+  };
+
+  const FormField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
+    <View style={styles.formGroup}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={[styles.input, multiline && styles.textArea]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#6b7280"
+        multiline={multiline}
+      />
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -232,201 +224,265 @@ export default function AddProductScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Add Product</Text>
             <Text style={styles.headerSubtitle}>
-              Share a URL or upload a screenshot
+              Paste a URL or upload a screenshot
             </Text>
           </View>
 
-          {/* URL Input Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Product URL</Text>
-            <View style={styles.urlInputRow}>
-              <TextInput
-                style={styles.urlInput}
-                placeholder="https://amazon.com/product..."
-                placeholderTextColor="#6b7280"
-                value={url}
-                onChangeText={setUrl}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-              {url.length > 0 && (
-                <TouchableOpacity 
-                  style={styles.clearUrlButton}
-                  onPress={() => setUrl('')}
-                >
-                  <Ionicons name="close-circle" size={22} color="#6b7280" />
-                </TouchableOpacity>
+          {!showForm ? (
+            <>
+              {/* Analyzing Overlay */}
+              {analyzing && (
+                <View style={styles.analyzingContainer}>
+                  <ActivityIndicator size="large" color="#6366f1" />
+                  <Text style={styles.analyzingText}>Analyzing screenshot...</Text>
+                  <Text style={styles.analyzingSubtext}>Extracting product information</Text>
+                </View>
               )}
-            </View>
-            
-            {/* Add to Tjiepp Button */}
-            <TouchableOpacity 
-              style={styles.pasteUrlButton}
-              onPress={pasteFromClipboard}
-            >
-              <Ionicons name="add-circle-outline" size={20} color="#fff" />
-              <Text style={styles.pasteUrlButtonText}>Add to my Tjiepp</Text>
-            </TouchableOpacity>
 
-            {url.length > 0 && (
-              <TouchableOpacity 
-                style={styles.deleteUrlButton}
-                onPress={() => setUrl('')}
-              >
-                <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                <Text style={styles.deleteUrlButtonText}>Clear URL</Text>
-              </TouchableOpacity>
-            )}
-            
-            <Text style={styles.hintText}>
-              Copy a product URL, then tap "Add to my Tjiepp"
-            </Text>
-          </View>
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Screenshot Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Upload Screenshot</Text>
-            
-            {screenshot ? (
-              <View style={styles.screenshotContainer}>
-                <Image
-                  source={{ uri: screenshot }}
-                  style={styles.screenshotPreview}
-                  resizeMode="contain"
-                />
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => setScreenshot(null)}
-                >
-                  <Ionicons name="close-circle" size={28} color="#ef4444" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.uploadButtonFull} onPress={pickImage}>
-                <Ionicons name="images-outline" size={32} color="#6366f1" />
-                <Text style={styles.uploadButtonText}>Choose from Gallery</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Analyze Button */}
-          {screenshot && !extractedInfo && (
-            <TouchableOpacity
-              style={[styles.analyzeButton, loading && styles.disabledButton]}
-              onPress={analyzeScreenshot}
-              disabled={loading}
-            >
-              {loading ? (
+              {!analyzing && (
                 <>
-                  <ActivityIndicator color="#fff" size="small" />
-                  <Text style={styles.analyzeButtonText}>Analyzing with AI...</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="sparkles" size={20} color="#fff" />
-                  <Text style={styles.analyzeButtonText}>Analyze with AI</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
+                  {/* URL Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Product URL</Text>
+                    <View style={styles.urlInputRow}>
+                      <TextInput
+                        style={styles.urlInput}
+                        placeholder="https://amazon.com/product..."
+                        placeholderTextColor="#6b7280"
+                        value={url}
+                        onChangeText={setUrl}
+                        autoCapitalize="none"
+                        keyboardType="url"
+                      />
+                      {url.length > 0 && (
+                        <TouchableOpacity 
+                          style={styles.clearUrlButton}
+                          onPress={() => setUrl('')}
+                        >
+                          <Ionicons name="close-circle" size={22} color="#6b7280" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.mainButton}
+                      onPress={pasteFromClipboard}
+                    >
+                      <Ionicons name="add-circle-outline" size={22} color="#fff" />
+                      <Text style={styles.mainButtonText}>Add to my Tjiepp</Text>
+                    </TouchableOpacity>
 
-          {/* Extracted Info / Edit Form */}
-          {(extractedInfo || screenshot) && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Product Details</Text>
-                {extractedInfo && (
-                  <View style={styles.confidenceBadge}>
-                    <Text style={styles.confidenceText}>
-                      {Math.round((extractedInfo.confidence || 0) * 100)}% confidence
+                    {url.length > 0 && (
+                      <TouchableOpacity 
+                        style={styles.clearButton}
+                        onPress={() => setUrl('')}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                        <Text style={styles.clearButtonText}>Clear URL</Text>
+                      </TouchableOpacity>
+                    )}
+                    
+                    <Text style={styles.hintText}>
+                      Copy a product URL, then tap "Add to my Tjiepp"
                     </Text>
                   </View>
-                )}
+
+                  {/* Divider */}
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>OR</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  {/* Screenshot Section */}
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Upload Screenshot</Text>
+                    
+                    <TouchableOpacity style={styles.uploadButton} onPress={pickImageAndAnalyze}>
+                      <Ionicons name="images-outline" size={40} color="#6366f1" />
+                      <Text style={styles.uploadButtonTitle}>Choose from Gallery</Text>
+                      <Text style={styles.uploadButtonSubtext}>Select a product screenshot to analyze</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </>
+          ) : (
+            /* Product Form */
+            <View style={styles.formSection}>
+              {/* Screenshot Preview */}
+              {screenshot && (
+                <View style={styles.previewContainer}>
+                  <Image 
+                    source={{ uri: screenshot }} 
+                    style={styles.previewImage}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    style={styles.changeImageButton}
+                    onPress={resetForm}
+                  >
+                    <Ionicons name="refresh" size={16} color="#fff" />
+                    <Text style={styles.changeImageText}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <Text style={styles.formTitle}>Product Details</Text>
+
+              <FormField label="Name *" value={name} onChangeText={setName} placeholder="Product name" />
+              
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <FormField label="Price" value={price} onChangeText={setPrice} placeholder="€0.00" />
+                </View>
+                <View style={styles.halfField}>
+                  <FormField label="Original Price" value={originalPrice} onChangeText={setOriginalPrice} placeholder="Was" />
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Product name"
-                  placeholderTextColor="#6b7280"
-                  value={name}
-                  onChangeText={setName}
-                />
+              <FormField label="Brand" value={brand} onChangeText={setBrand} placeholder="Brand name" />
+              
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <FormField label="Color" value={color} onChangeText={setColor} placeholder="Color" />
+                </View>
+                <View style={styles.halfField}>
+                  <FormField label="Size" value={size} onChangeText={setSize} placeholder="Size" />
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Price</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="$0.00"
-                  placeholderTextColor="#6b7280"
-                  value={price}
-                  onChangeText={setPrice}
-                />
+              {/* Quantity */}
+              <View style={styles.quantityRow}>
+                <Text style={styles.label}>Quantity</Text>
+                <View style={styles.quantityControl}>
+                  <TouchableOpacity 
+                    style={styles.quantityButton}
+                    onPress={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
+                  >
+                    <Ionicons name="remove" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.quantityInput}
+                    value={quantity}
+                    onChangeText={(text) => setQuantity(text.replace(/[^0-9]/g, '') || '1')}
+                    keyboardType="number-pad"
+                    textAlign="center"
+                  />
+                  <TouchableOpacity 
+                    style={styles.quantityButton}
+                    onPress={() => setQuantity((parseInt(quantity) + 1).toString())}
+                  >
+                    <Ionicons name="add" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Brand</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Brand name"
-                  placeholderTextColor="#6b7280"
-                  value={brand}
-                  onChangeText={setBrand}
-                />
-              </View>
+              <FormField label="Material" value={material} onChangeText={setMaterial} placeholder="Material/fabric" />
+              <FormField label="Category" value={category} onChangeText={setCategory} placeholder="Product category" />
+              <FormField label="Description" value={description} onChangeText={setDescription} placeholder="Product description" multiline />
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Description</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Product description"
-                  placeholderTextColor="#6b7280"
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* Action Buttons */}
-          {screenshot && (
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={clearForm}
-              >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                <Text style={styles.clearButtonText}>Clear</Text>
-              </TouchableOpacity>
-
+              {/* Save Button */}
               <TouchableOpacity
                 style={[styles.saveButton, saving && styles.disabledButton]}
-                onPress={saveProduct}
+                onPress={handleSavePress}
                 disabled={saving}
               >
                 {saving ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Ionicons name="checkmark" size={20} color="#fff" />
+                  <Ionicons name="checkmark-circle" size={24} color="#fff" />
                 )}
                 <Text style={styles.saveButtonText}>
-                  {saving ? 'Saving...' : 'Save Product'}
+                  {saving ? 'Saving...' : 'Save to My Tjiepp'}
                 </Text>
               </TouchableOpacity>
             </View>
           )}
         </ScrollView>
+
+        {/* Confirmation Modal */}
+        <Modal
+          visible={showConfirmModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Confirm Order</Text>
+              <Text style={styles.modalSubtitle}>Is this information correct?</Text>
+              
+              {/* Product Thumbnail */}
+              {screenshot && (
+                <View style={styles.thumbnailContainer}>
+                  <Image 
+                    source={{ uri: screenshot }} 
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+              
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Product</Text>
+                  <Text style={styles.summaryValue}>{name || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Brand</Text>
+                  <Text style={styles.summaryValue}>{brand || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Price</Text>
+                  <Text style={styles.summaryValuePrice}>{price || '-'}</Text>
+                </View>
+                
+                {originalPrice ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Original Price</Text>
+                    <Text style={styles.summaryValueStrike}>{originalPrice}</Text>
+                  </View>
+                ) : null}
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Size</Text>
+                  <Text style={styles.summaryValue}>{size || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Color</Text>
+                  <Text style={styles.summaryValue}>{color || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Quantity</Text>
+                  <Text style={styles.summaryValueQuantity}>x{quantity}</Text>
+                </View>
+              </ScrollView>
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.recaptureButton}
+                  onPress={handleRecapture}
+                >
+                  <Ionicons name="refresh" size={20} color="#f59e0b" />
+                  <Text style={styles.recaptureButtonText}>No, Recapture</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={confirmSave}
+                >
+                  <Ionicons name="checkmark" size={20} color="#fff" />
+                  <Text style={styles.confirmButtonText}>Yes, Save to Tjiepp</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -463,12 +519,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -496,7 +546,7 @@ const styles = StyleSheet.create({
     right: 12,
     padding: 4,
   },
-  pasteUrlButton: {
+  mainButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -506,12 +556,12 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 12,
   },
-  pasteUrlButtonText: {
+  mainButtonText: {
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
   },
-  deleteUrlButton: {
+  clearButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -523,7 +573,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10,
   },
-  deleteUrlButtonText: {
+  clearButtonText: {
     color: '#ef4444',
     fontSize: 14,
     fontWeight: '600',
@@ -531,15 +581,14 @@ const styles = StyleSheet.create({
   hintText: {
     color: '#6b7280',
     fontSize: 13,
-    marginTop: 10,
+    marginTop: 12,
     textAlign: 'center',
-    fontStyle: 'italic',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 24,
   },
   dividerLine: {
     flex: 1,
@@ -552,7 +601,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  uploadButtonFull: {
+  uploadButton: {
     backgroundColor: '#1a1a1a',
     borderRadius: 16,
     padding: 32,
@@ -562,90 +611,84 @@ const styles = StyleSheet.create({
     borderColor: '#2a2a2a',
     borderStyle: 'dashed',
   },
-  uploadOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  uploadButton: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#2a2a2a',
-    borderStyle: 'dashed',
-  },
-  uploadButtonText: {
-    color: '#9ca3af',
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  screenshotContainer: {
-    position: 'relative',
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#1a1a1a',
-  },
-  screenshotPreview: {
-    width: '100%',
-    height: 250,
-    borderRadius: 16,
-  },
-  removeButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-  },
-  analyzeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    marginHorizontal: 16,
-    marginTop: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 10,
-  },
-  analyzeButtonText: {
+  uploadButtonTitle: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    marginTop: 12,
   },
-  disabledButton: {
-    opacity: 0.7,
+  uploadButtonSubtext: {
+    color: '#6b7280',
+    fontSize: 13,
+    marginTop: 4,
   },
-  confidenceBadge: {
-    backgroundColor: '#1e3a5f',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+  analyzingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
   },
-  confidenceText: {
-    color: '#60a5fa',
-    fontSize: 12,
+  analyzingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 20,
+  },
+  analyzingSubtext: {
+    color: '#6b7280',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  formSection: {
+    padding: 16,
+  },
+  previewContainer: {
+    position: 'relative',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  previewImage: {
+    width: '100%',
+    height: 200,
+  },
+  changeImageButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  changeImageText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: '500',
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 16,
   },
   formGroup: {
     marginBottom: 16,
   },
   label: {
     color: '#9ca3af',
-    fontSize: 14,
+    fontSize: 13,
     marginBottom: 8,
     fontWeight: '500',
   },
   input: {
     backgroundColor: '#1a1a1a',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 14,
     color: '#fff',
-    fontSize: 15,
+    fontSize: 16,
     borderWidth: 1,
     borderColor: '#2a2a2a',
   },
@@ -653,42 +696,178 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
-  actionButtons: {
+  rowFields: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 24,
     gap: 12,
   },
-  clearButton: {
+  halfField: {
+    flex: 1,
+  },
+  quantityRow: {
+    marginBottom: 16,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  quantityButton: {
+    backgroundColor: '#6366f1',
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 14,
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    width: 80,
+    textAlign: 'center',
+  },
+  saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#22c55e',
+    paddingVertical: 18,
+    borderRadius: 16,
+    gap: 12,
+    marginTop: 16,
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
     backgroundColor: '#1a1a1a',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 15,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  thumbnailContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  thumbnailImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    backgroundColor: '#262626',
+  },
+  modalScrollView: {
+    maxHeight: 250,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a2a',
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#9ca3af',
+    flex: 1,
+  },
+  summaryValue: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
+  },
+  summaryValuePrice: {
+    fontSize: 18,
+    color: '#6366f1',
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'right',
+  },
+  summaryValueStrike: {
+    fontSize: 14,
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
+    flex: 2,
+    textAlign: 'right',
+  },
+  summaryValueQuantity: {
+    fontSize: 16,
+    color: '#22c55e',
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'right',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  recaptureButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#292524',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
-    borderWidth: 1,
-    borderColor: '#ef4444',
   },
-  clearButtonText: {
-    color: '#ef4444',
-    fontSize: 15,
+  recaptureButtonText: {
+    color: '#f59e0b',
+    fontSize: 14,
     fontWeight: '600',
   },
-  saveButton: {
+  confirmButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#22c55e',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
   },
-  saveButtonText: {
+  confirmButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
 });
