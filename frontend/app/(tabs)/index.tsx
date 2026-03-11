@@ -89,11 +89,14 @@ export default function ProductsScreen() {
   };
 
   const renderProduct = ({ item }: { item: Product }) => {
-    const imageSource = item.screenshot_base64
-      ? { uri: item.screenshot_base64.startsWith('data:') 
-          ? item.screenshot_base64 
-          : `data:image/jpeg;base64,${item.screenshot_base64}` }
-      : null;
+    // Prefer product image URL over screenshot
+    const imageSource = item.image_base64 && item.image_base64.startsWith('http')
+      ? { uri: item.image_base64 }  // Product image URL
+      : item.screenshot_base64
+        ? { uri: item.screenshot_base64.startsWith('data:') 
+            ? item.screenshot_base64 
+            : `data:image/jpeg;base64,${item.screenshot_base64}` }
+        : null;
 
     return (
       <TouchableOpacity

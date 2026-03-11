@@ -195,13 +195,16 @@ export default function ProductDetailScreen() {
     );
   }
 
-  const imageSource = product.screenshot_base64
-    ? {
-        uri: product.screenshot_base64.startsWith('data:')
-          ? product.screenshot_base64
-          : `data:image/jpeg;base64,${product.screenshot_base64}`,
-      }
-    : null;
+  // Prefer product image URL over screenshot
+  const imageSource = product.image_base64 && product.image_base64.startsWith('http')
+    ? { uri: product.image_base64 }  // Product image URL
+    : product.screenshot_base64
+      ? {
+          uri: product.screenshot_base64.startsWith('data:')
+            ? product.screenshot_base64
+            : `data:image/jpeg;base64,${product.screenshot_base64}`,
+        }
+      : null;
 
   return (
     <SafeAreaView style={styles.container}>

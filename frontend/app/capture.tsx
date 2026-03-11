@@ -55,6 +55,7 @@ export default function CaptureScreen() {
   const [saving, setSaving] = useState(false);
   const [pageContent, setPageContent] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [productImageUrl, setProductImageUrl] = useState('');
   
   // Product fields
   const [name, setName] = useState('');
@@ -160,6 +161,67 @@ export default function CaptureScreen() {
             } catch(e) {}
           });
           
+          // Find the main product image
+          let productImageUrl = '';
+          const imageSelectors = [
+            // Schema.org product image
+            '[itemprop="image"]',
+            // Common e-commerce selectors
+            '.product-image img',
+            '.product-gallery img',
+            '.product-photo img',
+            '#product-image img',
+            '[class*="product-image"] img',
+            '[class*="product-gallery"] img',
+            '[class*="main-image"] img',
+            '[class*="primary-image"] img',
+            '[data-zoom-image]',
+            // Amazon specific
+            '#landingImage',
+            '#imgBlkFront',
+            '.a-dynamic-image',
+            // General large images in product area
+            'main img[src*="product"]',
+            '.product img',
+            '[class*="product"] img[src]:not([src*="icon"]):not([src*="logo"])',
+          ];
+          
+          for (const selector of imageSelectors) {
+            const img = document.querySelector(selector);
+            if (img) {
+              const src = img.getAttribute('src') || img.getAttribute('data-src') || img.getAttribute('data-zoom-image');
+              if (src && src.startsWith('http') && !src.includes('icon') && !src.includes('logo') && !src.includes('sprite')) {
+                productImageUrl = src;
+                break;
+              }
+            }
+          }
+          
+          // Fallback: find largest image on page
+          if (!productImageUrl) {
+            const allImages = document.querySelectorAll('img[src^="http"]');
+            let largestImg = null;
+            let largestArea = 0;
+            allImages.forEach(img => {
+              const area = (img.naturalWidth || img.width || 0) * (img.naturalHeight || img.height || 0);
+              if (area > largestArea && !img.src.includes('logo') && !img.src.includes('icon')) {
+                largestArea = area;
+                largestImg = img;
+              }
+            });
+            if (largestImg) {
+              productImageUrl = largestImg.src;
+            }
+          }
+          
+          // Also check og:image meta tag
+          if (!productImageUrl) {
+            const ogImage = document.querySelector('meta[property="og:image"]');
+            if (ogImage) {
+              productImageUrl = ogImage.getAttribute('content') || '';
+            }
+          }
+          
           const mainContent = document.querySelector('main, [role="main"], .product, .product-detail')?.textContent?.substring(0, 3000) || '';
           
           return JSON.stringify({
@@ -167,6 +229,7 @@ export default function CaptureScreen() {
             descriptions: descriptions.slice(0, 2), 
             selectedColor: selectedColor,
             selectedSize: selectedSize,
+            productImageUrl: productImageUrl,
             mainContent, structuredData, url: window.location.href
           });
         };
@@ -190,6 +253,13 @@ export default function CaptureScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'PAGE_CONTENT') {
         setPageContent(data.content);
+        // Extract product image URL from page content
+        try {
+          const content = JSON.parse(data.content);
+          if (content.productImageUrl) {
+            setProductImageUrl(content.productImageUrl);
+          }
+        } catch (e) {}
       }
     } catch (e) {
       console.log('WebView message parse error:', e);
@@ -282,6 +352,7 @@ export default function CaptureScreen() {
         availability: availability.trim(),
         rating: rating.trim(),
         original_url: url.trim(),
+        image_base64: productImageUrl || '',  // Store the actual product image URL
         screenshot_base64: screenshot || '',
       });
 
@@ -618,11 +689,11 @@ export default function CaptureScreen() {
               <Text style={styles.modalTitle}>Confirm Order</Text>
               <Text style={styles.modalSubtitle}>Is this information correct?</Text>
               
-              {/* Product Thumbnail */}
-              {screenshot && (
+              {/* Product Thumbnail - prefer product image URL over screenshot */}
+              {(productImageUrl || screenshot) && (
                 <View style={styles.thumbnailContainer}>
                   <Image 
-                    source={{ uri: screenshot }} 
+                    source={{ uri: productImageUrl || screenshot }} 
                     style={styles.thumbnailImage}
                     resizeMode="cover"
                   />
