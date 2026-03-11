@@ -199,6 +199,7 @@ OTHER RULES:
 - Extract from BOTH the page content AND screenshot
 - Use empty string "" for any field you cannot find
 - For price, prefer sale/current price over original
+- PRICE IS CRITICAL: Look EVERYWHERE for the price - in headers, sidebars, "add to cart" sections, product tiles, price tags. Also look in the HTML for price-related classes, meta tags, or structured data. If you see ANY number with a currency symbol or in a price-like format near the product, extract it.
 - Be specific with category (not just "Product")
 - Return ONLY valid JSON, no markdown or explanation."""
         
