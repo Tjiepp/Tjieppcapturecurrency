@@ -46,7 +46,6 @@ export default function AddProductScreen() {
   const [productImageUrl, setProductImageUrl] = useState('');
   const [weight, setWeight] = useState('');
   const [dimensions, setDimensions] = useState('');
-  const [priceExtracted, setPriceExtracted] = useState(false);
 
   const pickImageAndAnalyze = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -96,7 +95,6 @@ export default function AddProductScreen() {
         setRating(info.rating || '');
         setWeight(info.weight || '');
         setDimensions(info.dimensions || '');
-        setPriceExtracted(!!(info.price && info.price.trim()));
         
         setShowForm(true);
 
@@ -202,7 +200,6 @@ export default function AddProductScreen() {
     setProductImageUrl('');
     setWeight('');
     setDimensions('');
-    setPriceExtracted(false);
   };
 
   const FormField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
@@ -345,17 +342,7 @@ export default function AddProductScreen() {
               
               <View style={styles.rowFields}>
                 <View style={styles.halfField}>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.label}>Price {priceExtracted ? <Ionicons name="lock-closed" size={11} color="#6b7280" /> : null}</Text>
-                    <TextInput
-                      style={[styles.input, priceExtracted && styles.readOnlyInput]}
-                      value={price}
-                      onChangeText={priceExtracted ? undefined : setPrice}
-                      editable={!priceExtracted}
-                      placeholder="Enter price"
-                      placeholderTextColor="#6b7280"
-                    />
-                  </View>
+                  <FormField label="Price" value={price} onChangeText={setPrice} placeholder="€0.00" />
                 </View>
                 <View style={styles.halfField}>
                   <FormField label="Original Price" value={originalPrice} onChangeText={setOriginalPrice} placeholder="Was" />
@@ -764,11 +751,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  readOnlyInput: {
-    backgroundColor: '#141414',
-    color: '#6366f1',
-    fontWeight: '700' as const,
   },
   quantityInput: {
     backgroundColor: '#1a1a1a',

@@ -74,7 +74,6 @@ export default function CaptureScreen() {
   const [rating, setRating] = useState('');
   const [weight, setWeight] = useState('');
   const [dimensions, setDimensions] = useState('');
-  const [priceExtracted, setPriceExtracted] = useState(false);
 
   const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
@@ -319,7 +318,6 @@ export default function CaptureScreen() {
       setRating(info.rating || '');
       setWeight(info.weight || '');
       setDimensions(info.dimensions || '');
-      setPriceExtracted(!!(info.price && info.price.trim()));
       
       setShowForm(true);
 
@@ -394,7 +392,6 @@ export default function CaptureScreen() {
     setRating('');
     setWeight('');
     setDimensions('');
-    setPriceExtracted(false);
   };
 
   const handleLoadEnd = () => {
@@ -565,12 +562,11 @@ export default function CaptureScreen() {
               
               <View style={styles.priceRow}>
                 <View style={styles.priceField}>
-                  <Text style={styles.fieldLabel}>Price {priceExtracted ? <Ionicons name="lock-closed" size={11} color="#6b7280" /> : null}</Text>
+                  <Text style={styles.fieldLabel}>Price</Text>
                   <TextInput
-                    style={[styles.fieldInput, priceExtracted && styles.readOnlyInput]}
+                    style={styles.fieldInput}
                     value={price}
-                    onChangeText={priceExtracted ? undefined : setPrice}
-                    editable={!priceExtracted}
+                    onChangeText={setPrice}
                     placeholder="$0.00"
                     placeholderTextColor="#6b7280"
                   />
@@ -979,11 +975,6 @@ const styles = StyleSheet.create({
   },
   strikePrice: {
     color: '#9ca3af',
-  },
-  readOnlyInput: {
-    backgroundColor: '#141414',
-    color: '#6366f1',
-    fontWeight: '700',
   },
   twoColRow: {
     flexDirection: 'row',
