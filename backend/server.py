@@ -149,9 +149,33 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
         # Build comprehensive prompt with page content if available
         page_context = ""
         if page_content:
-            # Truncate if too long (keep first 5000 chars)
-            truncated_content = page_content[:5000] if len(page_content) > 5000 else page_content
+            # Try to extract structured price from the page content JSON
+            extracted_prices_hint = ""
+            try:
+                parsed_content = json.loads(page_content)
+                # Get prices found by JS extraction
+                js_prices = parsed_content.get("prices", [])
+                structured_price = parsed_content.get("structuredPrice", "")
+                structured_original_price = parsed_content.get("structuredOriginalPrice", "")
+                
+                if structured_price:
+                    extracted_prices_hint += f"\nSTRUCTURED DATA PRICE: {structured_price}"
+                if structured_original_price:
+                    extracted_prices_hint += f"\nSTRUCTURED DATA ORIGINAL PRICE: {structured_original_price}"
+                if js_prices:
+                    extracted_prices_hint += f"\nPRICE ELEMENTS FOUND ON PAGE: {', '.join(str(p) for p in js_prices[:10])}"
+                    
+                # Get structured data (JSON-LD)
+                structured_data = parsed_content.get("structuredData", {})
+                if structured_data:
+                    extracted_prices_hint += f"\nJSON-LD STRUCTURED DATA: {json.dumps(structured_data)[:2000]}"
+            except (json.JSONDecodeError, TypeError):
+                pass
+            
+            # Truncate page content (increase limit to 12000 chars)
+            truncated_content = page_content[:12000] if len(page_content) > 12000 else page_content
             page_context = f"""
+{extracted_prices_hint}
 
 FULL PAGE CONTENT (extracted from entire page):
 {truncated_content}

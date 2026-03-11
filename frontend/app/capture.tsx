@@ -172,8 +172,45 @@ export default function CaptureScreen() {
               if (data['@type'] === 'Product' || data['@type']?.includes('Product')) {
                 structuredData = data;
               }
+              // Also check for @graph arrays
+              if (data['@graph']) {
+                data['@graph'].forEach(item => {
+                  if (item['@type'] === 'Product' || item['@type']?.includes('Product')) {
+                    structuredData = item;
+                  }
+                });
+              }
             } catch(e) {}
           });
+          
+          // Extract price from structured data if available
+          let structuredPrice = '';
+          let structuredOriginalPrice = '';
+          if (structuredData.offers) {
+            const offers = Array.isArray(structuredData.offers) ? structuredData.offers[0] : structuredData.offers;
+            structuredPrice = offers?.price || offers?.lowPrice || '';
+            structuredOriginalPrice = offers?.highPrice || '';
+            if (offers?.priceCurrency && structuredPrice) {
+              structuredPrice = offers.priceCurrency + ' ' + structuredPrice;
+            }
+          }
+          
+          // Also try to find price in common Dutch/EU price formats
+          const allPriceSelectors = [
+            '[class*="price"]', '[id*="price"]', '[data-price]', 
+            '.price', '.product-price', '.sale-price', '.current-price',
+            '[class*="prijs"]', '[class*="amount"]', '[class*="cost"]',
+            '.offer-price', '.selling-price', '.buy-price',
+            '[itemprop="price"]', '[data-test*="price"]',
+            '.promo-price', '.discount-price',
+            'span[class*="Price"]', 'div[class*="Price"]'
+          ];
+          const allPriceElements = document.querySelectorAll(allPriceSelectors.join(','));
+          const allPrices = Array.from(allPriceElements).map(el => {
+            const text = el.textContent?.trim();
+            const dataPrice = el.getAttribute('data-price') || el.getAttribute('content');
+            return text || dataPrice;
+          }).filter(Boolean).filter(p => /[\d€$£¥]/.test(p));
           
           // Find the main product image
           let productImageUrl = '';
@@ -239,10 +276,12 @@ export default function CaptureScreen() {
           const mainContent = document.querySelector('main, [role="main"], .product, .product-detail')?.textContent?.substring(0, 3000) || '';
           
           return JSON.stringify({
-            title, metaTags, prices: prices.slice(0, 5), names: names.slice(0, 3),
+            title, metaTags, prices: allPrices.slice(0, 10), names: names.slice(0, 3),
             descriptions: descriptions.slice(0, 2), 
             selectedColor: selectedColor,
             selectedSize: selectedSize,
+            structuredPrice: structuredPrice,
+            structuredOriginalPrice: structuredOriginalPrice,
             productImageUrl: productImageUrl,
             mainContent, structuredData, url: window.location.href
           });
