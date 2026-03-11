@@ -562,11 +562,14 @@ export default function CaptureScreen() {
               
               <View style={styles.priceRow}>
                 <View style={styles.priceField}>
-                  <Text style={styles.fieldLabel}>Price</Text>
-                  <View style={styles.readOnlyField}>
-                    <Text style={styles.readOnlyPriceText}>{price || 'N/A'}</Text>
-                    <Ionicons name="lock-closed" size={14} color="#6b7280" />
-                  </View>
+                  <Text style={styles.fieldLabel}>Price <Ionicons name="lock-closed" size={11} color="#6b7280" /></Text>
+                  <TextInput
+                    style={[styles.fieldInput, styles.readOnlyInput]}
+                    value={price}
+                    editable={false}
+                    placeholder="$0.00"
+                    placeholderTextColor="#6b7280"
+                  />
                 </View>
                 <View style={styles.priceField}>
                   <Text style={styles.fieldLabel}>Was</Text>
@@ -973,23 +976,9 @@ const styles = StyleSheet.create({
   strikePrice: {
     color: '#9ca3af',
   },
-  readOnlyField: {
+  readOnlyInput: {
     backgroundColor: '#141414',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  readOnlyText: {
-    color: '#9ca3af',
-    fontSize: 16,
-  },
-  readOnlyPriceText: {
     color: '#6366f1',
-    fontSize: 18,
     fontWeight: '700',
   },
   twoColRow: {
