@@ -259,35 +259,27 @@ export default function AddProductScreen() {
               )}
             </View>
             
-            {/* Paste URL Button */}
+            {/* Add to Tjiepp Button */}
             <TouchableOpacity 
               style={styles.pasteUrlButton}
               onPress={pasteFromClipboard}
             >
-              <Ionicons name="clipboard-outline" size={20} color="#6366f1" />
-              <Text style={styles.pasteUrlButtonText}>Paste URL from Clipboard</Text>
+              <Ionicons name="add-circle-outline" size={20} color="#fff" />
+              <Text style={styles.pasteUrlButtonText}>Add to my Tjiepp</Text>
             </TouchableOpacity>
 
-            <View style={styles.urlButtonsRow}>
+            {url.length > 0 && (
               <TouchableOpacity 
-                style={[styles.getInfoButton, !url && styles.disabledButton]}
-                onPress={handleGetInfoFromUrl}
-                disabled={!url}
+                style={styles.deleteUrlButton}
+                onPress={() => setUrl('')}
               >
-                <Ionicons name="globe-outline" size={20} color="#fff" />
-                <Text style={styles.getInfoButtonText}>Get Info from URL</Text>
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                <Text style={styles.deleteUrlButtonText}>Clear URL</Text>
               </TouchableOpacity>
-              {url.length > 0 && (
-                <TouchableOpacity 
-                  style={styles.deleteUrlButton}
-                  onPress={() => setUrl('')}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                </TouchableOpacity>
-              )}
-            </View>
+            )}
+            
             <Text style={styles.hintText}>
-              Tip: Copy a product URL, then tap "Paste URL" above
+              Copy a product URL, then tap "Add to my Tjiepp"
             </Text>
           </View>
 
@@ -508,48 +500,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#6366f1',
-    paddingVertical: 12,
+    backgroundColor: '#6366f1',
+    paddingVertical: 16,
     borderRadius: 12,
-    gap: 8,
+    gap: 10,
     marginTop: 12,
   },
   pasteUrlButtonText: {
-    color: '#6366f1',
-    fontSize: 15,
-    fontWeight: '600',
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
   },
-  urlButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-  },
-  getInfoButton: {
-    flex: 1,
+  deleteUrlButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 10,
-  },
-  getInfoButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  deleteUrlButton: {
     backgroundColor: '#1a1a1a',
     borderWidth: 1,
     borderColor: '#ef4444',
     borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 8,
+    marginTop: 10,
+  },
+  deleteUrlButtonText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
   hintText: {
     color: '#6b7280',

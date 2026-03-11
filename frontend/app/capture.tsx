@@ -670,7 +670,7 @@ export default function CaptureScreen() {
                   <Ionicons name="checkmark-circle" size={24} color="#fff" />
                 )}
                 <Text style={styles.saveButtonText}>
-                  {saving ? 'Saving...' : 'Save Product'}
+                  {saving ? 'Saving...' : 'Save to My Tjiepp'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -760,7 +760,7 @@ export default function CaptureScreen() {
                   onPress={confirmSave}
                 >
                   <Ionicons name="checkmark" size={20} color="#fff" />
-                  <Text style={styles.confirmButtonText}>Yes, Save</Text>
+                  <Text style={styles.confirmButtonText}>Yes, Save to Tjiepp</Text>
                 </TouchableOpacity>
               </View>
             </View>
