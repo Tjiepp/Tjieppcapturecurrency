@@ -10,6 +10,7 @@ import {
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -251,12 +252,18 @@ export default function CaptureScreen() {
     }
   };
 
-  const saveProduct = async () => {
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const handleSavePress = () => {
     if (!name.trim()) {
       Alert.alert('Name Required', 'Please enter a product name.');
       return;
     }
+    setShowConfirmModal(true);
+  };
 
+  const confirmSave = async () => {
+    setShowConfirmModal(false);
     setSaving(true);
 
     try {
@@ -277,13 +284,32 @@ export default function CaptureScreen() {
         screenshot_base64: screenshot || '',
       });
 
-      // Navigate back to products list without alert
+      // Navigate back to products list
       router.push('/(tabs)/');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Could not save the product.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleRecapture = () => {
+    setShowConfirmModal(false);
+    setShowForm(false);
+    setScreenshot(null);
+    // Reset form fields
+    setName('');
+    setPrice('');
+    setOriginalPrice('');
+    setDescription('');
+    setBrand('');
+    setColor('');
+    setSize('');
+    setQuantity('1');
+    setMaterial('');
+    setCategory('');
+    setAvailability('');
+    setRating('');
   };
 
   const handleLoadEnd = () => {
@@ -563,7 +589,7 @@ export default function CaptureScreen() {
               {/* Save Button */}
               <TouchableOpacity
                 style={[styles.saveButton, saving && styles.disabledButton]}
-                onPress={saveProduct}
+                onPress={handleSavePress}
                 disabled={saving}
               >
                 {saving ? (
@@ -578,6 +604,85 @@ export default function CaptureScreen() {
             </View>
           )}
         </ScrollView>
+
+        {/* Confirmation Modal */}
+        <Modal
+          visible={showConfirmModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Confirm Order</Text>
+              <Text style={styles.modalSubtitle}>Is this information correct?</Text>
+              
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Product</Text>
+                  <Text style={styles.summaryValue}>{name || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Brand</Text>
+                  <Text style={styles.summaryValue}>{brand || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Price</Text>
+                  <Text style={styles.summaryValuePrice}>{price || '-'}</Text>
+                </View>
+                
+                {originalPrice ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Original Price</Text>
+                    <Text style={styles.summaryValueStrike}>{originalPrice}</Text>
+                  </View>
+                ) : null}
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Size</Text>
+                  <Text style={styles.summaryValue}>{size || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Color</Text>
+                  <Text style={styles.summaryValue}>{color || '-'}</Text>
+                </View>
+                
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Quantity</Text>
+                  <Text style={styles.summaryValueQuantity}>x{quantity}</Text>
+                </View>
+                
+                {category ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Category</Text>
+                    <Text style={styles.summaryValue}>{category}</Text>
+                  </View>
+                ) : null}
+              </ScrollView>
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.recaptureButton}
+                  onPress={handleRecapture}
+                >
+                  <Ionicons name="refresh" size={20} color="#f59e0b" />
+                  <Text style={styles.recaptureButtonText}>No, Recapture</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={confirmSave}
+                >
+                  <Ionicons name="checkmark" size={20} color="#fff" />
+                  <Text style={styles.confirmButtonText}>Yes, Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -824,6 +929,115 @@ const styles = StyleSheet.create({
   goBackButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 15,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalScrollView: {
+    maxHeight: 300,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a2a',
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#9ca3af',
+    flex: 1,
+  },
+  summaryValue: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
+  },
+  summaryValuePrice: {
+    fontSize: 18,
+    color: '#6366f1',
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'right',
+  },
+  summaryValueStrike: {
+    fontSize: 14,
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
+    flex: 2,
+    textAlign: 'right',
+  },
+  summaryValueQuantity: {
+    fontSize: 16,
+    color: '#22c55e',
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'right',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  recaptureButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#292524',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  recaptureButtonText: {
+    color: '#f59e0b',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  confirmButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#22c55e',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '600',
   },
 });
