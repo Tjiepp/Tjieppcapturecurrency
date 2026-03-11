@@ -77,6 +77,7 @@ export default function CaptureScreen() {
 
   const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (params.url) {
@@ -84,6 +85,15 @@ export default function CaptureScreen() {
       setIsLoading(true);
     }
   }, [params.url]);
+
+  // Auto-scroll to top when form appears
+  useEffect(() => {
+    if (showForm && scrollViewRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }, 100);
+    }
+  }, [showForm]);
 
   // JavaScript to inject into WebView to extract page content
   const extractPageContentJS = `
@@ -473,7 +483,7 @@ export default function CaptureScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
+        <ScrollView ref={scrollViewRef} style={styles.flex} contentContainerStyle={styles.scrollContent}>
           {/* WebView */}
           {!showForm ? (
             <View style={styles.webViewSection}>
