@@ -345,7 +345,7 @@ export default function AddProductScreen() {
                   <View style={styles.formGroup}>
                     <Text style={styles.label}>Price</Text>
                     <View style={styles.readOnlyField}>
-                      <Text style={styles.readOnlyText}>{price || 'N/A'}</Text>
+                      <Text style={styles.readOnlyPriceText}>{price || 'N/A'}</Text>
                       <Ionicons name="lock-closed" size={14} color="#6b7280" />
                     </View>
                   </View>
@@ -771,6 +771,11 @@ const styles = StyleSheet.create({
   readOnlyText: {
     color: '#9ca3af',
     fontSize: 16,
+  },
+  readOnlyPriceText: {
+    color: '#6366f1',
+    fontSize: 18,
+    fontWeight: '700' as const,
   },
   quantityInput: {
     backgroundColor: '#1a1a1a',
