@@ -295,8 +295,17 @@ export default function CaptureScreen() {
   };
 
   const handleLoadStart = () => {
-    setIsLoading(false);
-    setPageLoaded(false);
+    // Don't hide the button when page reloads due to user interaction
+    // Only show loading indicator if page wasn't loaded yet
+    if (!pageLoaded) {
+      setIsLoading(true);
+    }
+    // Re-extract page content after any navigation/reload
+    if (webViewRef.current && pageLoaded) {
+      setTimeout(() => {
+        webViewRef.current?.injectJavaScript(extractPageContentJS);
+      }, 1500);
+    }
   };
 
   const FormField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
