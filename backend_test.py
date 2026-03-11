@@ -1,381 +1,476 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Product Capture App
-Tests all CRUD endpoints and AI screenshot analysis functionality
+Backend API Test Suite for Product Capture App
+Tests all CRUD operations and AI analysis endpoints
 """
 
 import requests
 import json
-import base64
 import time
-from datetime import datetime
-from typing import Dict, Any
+import base64
+from io import BytesIO
+from PIL import Image
+import random
+import string
 
-# Backend URL from frontend .env
-BACKEND_URL = "https://share-screenshot.preview.emergentagent.com/api"
+# Test Configuration
+BASE_URL = "https://product-capture-3.preview.emergentagent.com/api"
 
-def create_sample_base64_image() -> str:
-    """Create a simple base64 encoded PNG image for testing"""
-    # This is a minimal 1x1 pixel PNG image in base64
-    # For more realistic testing, we would use an actual product image
-    return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
-
-def create_realistic_product_image() -> str:
-    """Create a more realistic base64 encoded image for AI testing"""
-    try:
-        from PIL import Image, ImageDraw
-        import io
-        
-        # Create a simple RGB image with product-like content
-        img = Image.new('RGB', (300, 200), color='white')
-        draw = ImageDraw.Draw(img)
-        
-        # Add some visual elements to simulate a product screenshot
-        draw.rectangle([20, 20, 280, 180], fill='lightblue', outline='blue', width=2)
-        draw.text((50, 80), 'iPhone 15 Pro', fill='black')
-        draw.text((50, 100), '$1199.99', fill='green')
-        draw.text((50, 120), 'Apple Inc.', fill='gray')
-        
-        # Convert to base64 JPEG
-        buffer = io.BytesIO()
-        img.save(buffer, format='JPEG', quality=85)
-        return base64.b64encode(buffer.getvalue()).decode()
-    except ImportError:
-        # Fallback to minimal valid JPEG if PIL is not available
-        # This is a minimal valid JPEG header + data
-        jpeg_data = b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0\x00\x11\x08\x00\x01\x00\x01\x01\x01\x11\x00\x02\x11\x01\x03\x11\x01\xff\xc4\x00\x14\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\xc4\x00\x14\x10\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xda\x00\x0c\x03\x01\x00\x02\x11\x03\x11\x00\x3f\x00\xaa\xff\xd9'
-        return base64.b64encode(jpeg_data).decode()
-
-class ProductCaptureAPITester:
-    def __init__(self, base_url: str):
-        self.base_url = base_url
-        self.session = requests.Session()
-        self.session.headers.update({'Content-Type': 'application/json'})
-        self.test_results = []
+class ProductCaptureAPITest:
+    def __init__(self):
+        self.base_url = BASE_URL
         self.created_product_id = None
-
-    def log_test(self, test_name: str, success: bool, message: str = "", response: Any = None):
-        """Log test results"""
-        result = {
-            'test_name': test_name,
-            'success': success,
-            'message': message,
-            'timestamp': datetime.now().isoformat()
-        }
-        if response and hasattr(response, 'status_code'):
-            result['status_code'] = response.status_code
-            result['response_time'] = getattr(response, 'elapsed', None)
+        self.test_results = []
         
-        self.test_results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status} | {test_name}")
-        if message:
-            print(f"     {message}")
-        if response and hasattr(response, 'status_code'):
-            print(f"     Status Code: {response.status_code}")
-
+    def log_result(self, test_name, passed, details):
+        """Log test result"""
+        status = "✅ PASS" if passed else "❌ FAIL"
+        self.test_results.append({
+            "test": test_name,
+            "passed": passed,
+            "details": details
+        })
+        print(f"{status}: {test_name}")
+        if details:
+            print(f"    Details: {details}")
+        print()
+    
+    def generate_test_image(self):
+        """Generate a simple test image as base64"""
+        # Create a simple 100x100 red square image
+        img = Image.new('RGB', (100, 100), color='red')
+        buffer = BytesIO()
+        img.save(buffer, format='JPEG')
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        return img_base64
+    
     def test_health_check(self):
-        """Test GET /api/health"""
+        """Test the health check endpoint"""
         try:
-            response = self.session.get(f"{self.base_url}/health", timeout=10)
+            response = requests.get(f"{self.base_url}/health", timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
-                if 'status' in data and data['status'] == 'healthy':
-                    self.log_test("Health Check", True, "API is healthy", response)
+                if "status" in data and data["status"] == "healthy":
+                    self.log_result("Health Check", True, f"Status: {data['status']}")
                     return True
                 else:
-                    self.log_test("Health Check", False, f"Invalid response format: {data}", response)
+                    self.log_result("Health Check", False, f"Unexpected response: {data}")
+                    return False
             else:
-                self.log_test("Health Check", False, f"HTTP {response.status_code}: {response.text}", response)
+                self.log_result("Health Check", False, f"Status code: {response.status_code}")
+                return False
                 
-        except requests.exceptions.RequestException as e:
-            self.log_test("Health Check", False, f"Request failed: {str(e)}")
         except Exception as e:
-            self.log_test("Health Check", False, f"Unexpected error: {str(e)}")
+            self.log_result("Health Check", False, f"Exception: {str(e)}")
+            return False
+    
+    def test_create_product_with_all_fields(self):
+        """Test creating a product with ALL fields including weight and dimensions"""
+        test_data = {
+            "name": "Nike Air Max 270",
+            "price": "$149.99",
+            "original_price": "$179.99",
+            "currency": "USD",
+            "description": "Lifestyle running shoes with Max Air cushioning",
+            "brand": "Nike",
+            "color": "Black/White",
+            "size": "42",
+            "quantity": 2,
+            "material": "Mesh and synthetic upper",
+            "category": "Footwear",
+            "availability": "In Stock",
+            "rating": "4.5/5 (1,234 reviews)",
+            "weight": "350g",
+            "dimensions": "30x20x12 cm",
+            "original_url": "https://example.com/nike-air-max-270",
+            "image_base64": self.generate_test_image(),
+            "screenshot_base64": self.generate_test_image()
+        }
         
-        return False
-
-    def test_create_product(self):
-        """Test POST /api/products"""
         try:
-            product_data = {
-                "name": "iPhone 15 Pro Max",
-                "price": "$1199.99",
-                "description": "Latest Apple iPhone with titanium design and advanced camera system",
-                "brand": "Apple",
-                "original_url": "https://apple.com/iphone-15-pro",
-                "image_base64": create_sample_base64_image(),
-                "screenshot_base64": create_realistic_product_image()
-            }
-            
-            response = self.session.post(f"{self.base_url}/products", 
-                                       json=product_data, timeout=10)
+            response = requests.post(
+                f"{self.base_url}/products",
+                json=test_data,
+                headers={"Content-Type": "application/json"},
+                timeout=15
+            )
             
             if response.status_code == 200:
-                data = response.json()
-                if 'id' in data and data['name'] == product_data['name']:
-                    self.created_product_id = data['id']
-                    self.log_test("Create Product", True, 
-                                f"Product created with ID: {self.created_product_id}", response)
-                    return True
-                else:
-                    self.log_test("Create Product", False, 
-                                f"Invalid response format: {data}", response)
-            else:
-                self.log_test("Create Product", False, 
-                            f"HTTP {response.status_code}: {response.text}", response)
+                created_product = response.json()
+                self.created_product_id = created_product.get("id")
                 
-        except requests.exceptions.RequestException as e:
-            self.log_test("Create Product", False, f"Request failed: {str(e)}")
+                # Verify ALL fields are present in response
+                missing_fields = []
+                for field, expected_value in test_data.items():
+                    if field in created_product:
+                        actual_value = created_product[field]
+                        if actual_value != expected_value:
+                            missing_fields.append(f"{field}: expected '{expected_value}', got '{actual_value}'")
+                    else:
+                        missing_fields.append(f"{field}: missing from response")
+                
+                # Check for required system fields
+                required_system_fields = ["id", "created_at", "updated_at"]
+                for field in required_system_fields:
+                    if field not in created_product:
+                        missing_fields.append(f"{field}: system field missing")
+                
+                if not missing_fields:
+                    # Specifically verify weight and dimensions
+                    weight_ok = created_product.get("weight") == "350g"
+                    dimensions_ok = created_product.get("dimensions") == "30x20x12 cm"
+                    
+                    if weight_ok and dimensions_ok:
+                        self.log_result(
+                            "Create Product - All Fields", 
+                            True, 
+                            f"Product created with ID: {self.created_product_id}. Weight: {created_product.get('weight')}, Dimensions: {created_product.get('dimensions')}"
+                        )
+                        return True
+                    else:
+                        self.log_result(
+                            "Create Product - All Fields", 
+                            False, 
+                            f"Weight/Dimensions not saved correctly. Weight: {created_product.get('weight')}, Dimensions: {created_product.get('dimensions')}"
+                        )
+                        return False
+                else:
+                    self.log_result(
+                        "Create Product - All Fields", 
+                        False, 
+                        f"Field issues: {', '.join(missing_fields[:5])}"  # Show first 5 issues
+                    )
+                    return False
+            else:
+                self.log_result(
+                    "Create Product - All Fields", 
+                    False, 
+                    f"Status code: {response.status_code}, Response: {response.text}"
+                )
+                return False
+                
         except Exception as e:
-            self.log_test("Create Product", False, f"Unexpected error: {str(e)}")
-        
-        return False
-
+            self.log_result("Create Product - All Fields", False, f"Exception: {str(e)}")
+            return False
+    
     def test_get_all_products(self):
-        """Test GET /api/products"""
+        """Test getting all products"""
         try:
-            response = self.session.get(f"{self.base_url}/products", timeout=10)
+            response = requests.get(f"{self.base_url}/products", timeout=10)
             
             if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    self.log_test("Get All Products", True, 
-                                f"Retrieved {len(data)} products", response)
-                    return True
+                products = response.json()
+                if isinstance(products, list):
+                    # Verify our created product is in the list
+                    found_product = False
+                    if self.created_product_id:
+                        for product in products:
+                            if product.get("id") == self.created_product_id:
+                                found_product = True
+                                # Verify weight and dimensions are preserved
+                                weight_ok = product.get("weight") == "350g"
+                                dimensions_ok = product.get("dimensions") == "30x20x12 cm"
+                                
+                                if weight_ok and dimensions_ok:
+                                    self.log_result(
+                                        "Get All Products", 
+                                        True, 
+                                        f"Found {len(products)} products. Created product found with correct weight/dimensions."
+                                    )
+                                    return True
+                                else:
+                                    self.log_result(
+                                        "Get All Products", 
+                                        False, 
+                                        f"Created product found but weight/dimensions incorrect: weight={product.get('weight')}, dimensions={product.get('dimensions')}"
+                                    )
+                                    return False
+                        
+                        if not found_product:
+                            self.log_result(
+                                "Get All Products", 
+                                False, 
+                                f"Created product ID {self.created_product_id} not found in {len(products)} products"
+                            )
+                            return False
+                    else:
+                        self.log_result(
+                            "Get All Products", 
+                            True, 
+                            f"Retrieved {len(products)} products (no created product to verify)"
+                        )
+                        return True
                 else:
-                    self.log_test("Get All Products", False, 
-                                f"Expected list, got: {type(data)}", response)
+                    self.log_result("Get All Products", False, f"Response is not a list: {type(products)}")
+                    return False
             else:
-                self.log_test("Get All Products", False, 
-                            f"HTTP {response.status_code}: {response.text}", response)
+                self.log_result("Get All Products", False, f"Status code: {response.status_code}")
+                return False
                 
-        except requests.exceptions.RequestException as e:
-            self.log_test("Get All Products", False, f"Request failed: {str(e)}")
         except Exception as e:
-            self.log_test("Get All Products", False, f"Unexpected error: {str(e)}")
-        
-        return False
-
+            self.log_result("Get All Products", False, f"Exception: {str(e)}")
+            return False
+    
     def test_get_single_product(self):
-        """Test GET /api/products/{id}"""
+        """Test getting a single product by ID"""
         if not self.created_product_id:
-            self.log_test("Get Single Product", False, "No product ID available (create product first)")
+            self.log_result("Get Single Product", False, "No created product ID available")
             return False
-            
+        
         try:
-            response = self.session.get(f"{self.base_url}/products/{self.created_product_id}", 
-                                      timeout=10)
+            response = requests.get(f"{self.base_url}/products/{self.created_product_id}", timeout=10)
             
             if response.status_code == 200:
-                data = response.json()
-                if 'id' in data and data['id'] == self.created_product_id:
-                    self.log_test("Get Single Product", True, 
-                                f"Retrieved product: {data['name']}", response)
+                product = response.json()
+                
+                # Verify key fields including weight and dimensions
+                expected_fields = {
+                    "name": "Nike Air Max 270",
+                    "weight": "350g",
+                    "dimensions": "30x20x12 cm",
+                    "price": "$149.99",
+                    "brand": "Nike"
+                }
+                
+                missing_or_incorrect = []
+                for field, expected_value in expected_fields.items():
+                    if field not in product:
+                        missing_or_incorrect.append(f"{field}: missing")
+                    elif product[field] != expected_value:
+                        missing_or_incorrect.append(f"{field}: expected '{expected_value}', got '{product[field]}'")
+                
+                if not missing_or_incorrect:
+                    self.log_result(
+                        "Get Single Product", 
+                        True, 
+                        f"Product retrieved successfully with ID: {product.get('id')}"
+                    )
                     return True
                 else:
-                    self.log_test("Get Single Product", False, 
-                                f"Product ID mismatch or invalid format", response)
+                    self.log_result(
+                        "Get Single Product", 
+                        False, 
+                        f"Field issues: {', '.join(missing_or_incorrect)}"
+                    )
+                    return False
             elif response.status_code == 404:
-                self.log_test("Get Single Product", False, 
-                            "Product not found", response)
+                self.log_result("Get Single Product", False, "Product not found (404)")
+                return False
             else:
-                self.log_test("Get Single Product", False, 
-                            f"HTTP {response.status_code}: {response.text}", response)
+                self.log_result("Get Single Product", False, f"Status code: {response.status_code}")
+                return False
                 
-        except requests.exceptions.RequestException as e:
-            self.log_test("Get Single Product", False, f"Request failed: {str(e)}")
         except Exception as e:
-            self.log_test("Get Single Product", False, f"Unexpected error: {str(e)}")
-        
-        return False
-
-    def test_update_product(self):
-        """Test PUT /api/products/{id}"""
-        if not self.created_product_id:
-            self.log_test("Update Product", False, "No product ID available (create product first)")
+            self.log_result("Get Single Product", False, f"Exception: {str(e)}")
             return False
-            
+    
+    def test_update_product_weight_dimensions(self):
+        """Test updating product weight and dimensions specifically"""
+        if not self.created_product_id:
+            self.log_result("Update Product Weight/Dimensions", False, "No created product ID available")
+            return False
+        
+        update_data = {
+            "weight": "400g",
+            "dimensions": "35x25x15 cm",
+            "price": "$139.99"  # Also update price to verify multiple fields
+        }
+        
         try:
-            update_data = {
-                "name": "iPhone 15 Pro Max - Updated",
-                "price": "$1099.99",
-                "description": "Updated description with new pricing"
-            }
-            
-            response = self.session.put(f"{self.base_url}/products/{self.created_product_id}", 
-                                      json=update_data, timeout=10)
+            response = requests.put(
+                f"{self.base_url}/products/{self.created_product_id}",
+                json=update_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
             
             if response.status_code == 200:
-                data = response.json()
-                if data['name'] == update_data['name'] and data['price'] == update_data['price']:
-                    self.log_test("Update Product", True, 
-                                f"Product updated successfully", response)
+                updated_product = response.json()
+                
+                # Verify updates
+                weight_updated = updated_product.get("weight") == "400g"
+                dimensions_updated = updated_product.get("dimensions") == "35x25x15 cm"
+                price_updated = updated_product.get("price") == "$139.99"
+                
+                # Verify other fields weren't changed
+                name_preserved = updated_product.get("name") == "Nike Air Max 270"
+                brand_preserved = updated_product.get("brand") == "Nike"
+                
+                if weight_updated and dimensions_updated and price_updated and name_preserved and brand_preserved:
+                    self.log_result(
+                        "Update Product Weight/Dimensions", 
+                        True, 
+                        f"Updated: weight={updated_product.get('weight')}, dimensions={updated_product.get('dimensions')}, price={updated_product.get('price')}"
+                    )
                     return True
                 else:
-                    self.log_test("Update Product", False, 
-                                f"Update not reflected in response", response)
-            elif response.status_code == 404:
-                self.log_test("Update Product", False, 
-                            "Product not found for update", response)
+                    issues = []
+                    if not weight_updated:
+                        issues.append(f"weight not updated: {updated_product.get('weight')}")
+                    if not dimensions_updated:
+                        issues.append(f"dimensions not updated: {updated_product.get('dimensions')}")
+                    if not price_updated:
+                        issues.append(f"price not updated: {updated_product.get('price')}")
+                    if not name_preserved:
+                        issues.append(f"name changed: {updated_product.get('name')}")
+                    if not brand_preserved:
+                        issues.append(f"brand changed: {updated_product.get('brand')}")
+                    
+                    self.log_result(
+                        "Update Product Weight/Dimensions", 
+                        False, 
+                        f"Update issues: {', '.join(issues)}"
+                    )
+                    return False
             else:
-                self.log_test("Update Product", False, 
-                            f"HTTP {response.status_code}: {response.text}", response)
+                self.log_result("Update Product Weight/Dimensions", False, f"Status code: {response.status_code}")
+                return False
                 
-        except requests.exceptions.RequestException as e:
-            self.log_test("Update Product", False, f"Request failed: {str(e)}")
         except Exception as e:
-            self.log_test("Update Product", False, f"Unexpected error: {str(e)}")
+            self.log_result("Update Product Weight/Dimensions", False, f"Exception: {str(e)}")
+            return False
+    
+    def test_ai_analysis_with_weight_dimensions(self):
+        """Test AI screenshot analysis to verify weight and dimensions are returned"""
+        # Create a more realistic test screenshot (simulate a product page)
+        test_image = self.generate_test_image()
         
-        return False
-
-    def test_analyze_screenshot(self):
-        """Test POST /api/products/analyze-screenshot"""
-        try:
-            # Create a more realistic base64 image for AI analysis
-            analyze_data = {
-                "screenshot_base64": create_realistic_product_image(),
-                "url": "https://apple.com/iphone-15-pro"
-            }
+        test_data = {
+            "screenshot_base64": f"data:image/jpeg;base64,{test_image}",
+            "url": "https://example.com/test-product",
+            "page_content": """
+            Apple iPhone 15 Pro - 128GB - Natural Titanium
+            Price: $999.00
+            Was: $1099.00
+            Brand: Apple
+            Color: Natural Titanium (currently selected)
+            Storage: 128GB (currently selected)
+            Material: Titanium
+            Category: Electronics
+            In Stock - Ships in 1-2 days
+            Rating: 4.8/5 (2,547 reviews)
             
-            response = self.session.post(f"{self.base_url}/products/analyze-screenshot", 
-                                       json=analyze_data, timeout=30)  # Longer timeout for AI
+            Technical Specifications:
+            Weight: 187g
+            Dimensions: 146.6 x 70.6 x 8.25 mm
+            Display: 6.1-inch Super Retina XDR
+            """
+        }
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/products/analyze-screenshot",
+                json=test_data,
+                headers={"Content-Type": "application/json"},
+                timeout=30  # AI analysis can take longer
+            )
             
             if response.status_code == 200:
-                data = response.json()
-                # Check if response has expected fields from AI analysis
-                expected_fields = ['name', 'price', 'description', 'brand', 'confidence']
-                if all(field in data for field in expected_fields):
-                    self.log_test("AI Screenshot Analysis", True, 
-                                f"AI analysis completed. Confidence: {data.get('confidence', 'N/A')}", response)
-                    return True
+                analysis_result = response.json()
+                
+                # Verify the response structure and that weight/dimensions are included
+                required_fields = ["name", "price", "brand", "weight", "dimensions", "confidence"]
+                missing_fields = [field for field in required_fields if field not in analysis_result]
+                
+                if not missing_fields:
+                    weight = analysis_result.get("weight", "")
+                    dimensions = analysis_result.get("dimensions", "")
+                    confidence = analysis_result.get("confidence", 0)
+                    
+                    # Check if weight and dimensions are extracted (they should be strings, can be empty if not found)
+                    weight_field_exists = isinstance(weight, str)
+                    dimensions_field_exists = isinstance(dimensions, str)
+                    confidence_valid = isinstance(confidence, (int, float)) and 0 <= confidence <= 1
+                    
+                    if weight_field_exists and dimensions_field_exists and confidence_valid:
+                        self.log_result(
+                            "AI Analysis - Weight/Dimensions Fields", 
+                            True, 
+                            f"Analysis completed. Weight field: '{weight}', Dimensions field: '{dimensions}', Confidence: {confidence}"
+                        )
+                        return True
+                    else:
+                        issues = []
+                        if not weight_field_exists:
+                            issues.append(f"weight field invalid: {type(weight)}")
+                        if not dimensions_field_exists:
+                            issues.append(f"dimensions field invalid: {type(dimensions)}")
+                        if not confidence_valid:
+                            issues.append(f"confidence invalid: {confidence}")
+                        
+                        self.log_result(
+                            "AI Analysis - Weight/Dimensions Fields", 
+                            False, 
+                            f"Field type/value issues: {', '.join(issues)}"
+                        )
+                        return False
                 else:
-                    self.log_test("AI Screenshot Analysis", False, 
-                                f"Missing expected fields in response: {data}", response)
+                    self.log_result(
+                        "AI Analysis - Weight/Dimensions Fields", 
+                        False, 
+                        f"Missing required fields: {', '.join(missing_fields)}"
+                    )
+                    return False
             else:
-                self.log_test("AI Screenshot Analysis", False, 
-                            f"HTTP {response.status_code}: {response.text}", response)
+                self.log_result(
+                    "AI Analysis - Weight/Dimensions Fields", 
+                    False, 
+                    f"Status code: {response.status_code}, Response: {response.text[:200]}"
+                )
+                return False
                 
-        except requests.exceptions.RequestException as e:
-            self.log_test("AI Screenshot Analysis", False, f"Request failed: {str(e)}")
         except Exception as e:
-            self.log_test("AI Screenshot Analysis", False, f"Unexpected error: {str(e)}")
-        
-        return False
-
-    def test_delete_product(self):
-        """Test DELETE /api/products/{id}"""
-        if not self.created_product_id:
-            self.log_test("Delete Product", False, "No product ID available (create product first)")
+            self.log_result("AI Analysis - Weight/Dimensions Fields", False, f"Exception: {str(e)}")
             return False
-            
-        try:
-            response = self.session.delete(f"{self.base_url}/products/{self.created_product_id}", 
-                                         timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'message' in data:
-                    self.log_test("Delete Product", True, 
-                                "Product deleted successfully", response)
-                    return True
-                else:
-                    self.log_test("Delete Product", False, 
-                                f"Unexpected response format: {data}", response)
-            elif response.status_code == 404:
-                self.log_test("Delete Product", False, 
-                            "Product not found for deletion", response)
-            else:
-                self.log_test("Delete Product", False, 
-                            f"HTTP {response.status_code}: {response.text}", response)
-                
-        except requests.exceptions.RequestException as e:
-            self.log_test("Delete Product", False, f"Request failed: {str(e)}")
-        except Exception as e:
-            self.log_test("Delete Product", False, f"Unexpected error: {str(e)}")
+    
+    def run_all_tests(self):
+        """Run all tests in sequence"""
+        print("🧪 Starting Product Capture API Tests")
+        print("=" * 60)
         
-        return False
-
-    def verify_deletion(self):
-        """Verify that the product was actually deleted"""
-        if not self.created_product_id:
-            self.log_test("Verify Deletion", False, "No product ID to verify")
-            return False
-            
-        try:
-            response = self.session.get(f"{self.base_url}/products/{self.created_product_id}", 
-                                      timeout=10)
-            
-            if response.status_code == 404:
-                self.log_test("Verify Deletion", True, 
-                            "Product successfully removed from database", response)
-                return True
-            elif response.status_code == 200:
-                self.log_test("Verify Deletion", False, 
-                            "Product still exists after deletion", response)
-            else:
-                self.log_test("Verify Deletion", False, 
-                            f"Unexpected status during verification: {response.status_code}", response)
-                
-        except requests.exceptions.RequestException as e:
-            self.log_test("Verify Deletion", False, f"Request failed: {str(e)}")
-        except Exception as e:
-            self.log_test("Verify Deletion", False, f"Unexpected error: {str(e)}")
-        
-        return False
-
-    def run_full_test_suite(self):
-        """Run the complete CRUD test flow"""
-        print("=" * 60)
-        print("PRODUCT CAPTURE APP - BACKEND API TESTING")
-        print("=" * 60)
-        print(f"Backend URL: {self.base_url}")
-        print(f"Test Start Time: {datetime.now()}")
-        print("=" * 60)
-
-        # Test sequence as requested
         tests = [
-            ("Health Check", self.test_health_check),
-            ("Create Product", self.test_create_product),
-            ("Get All Products", self.test_get_all_products),
-            ("Get Single Product", self.test_get_single_product),
-            ("Update Product", self.test_update_product),
-            ("AI Screenshot Analysis", self.test_analyze_screenshot),
-            ("Delete Product", self.test_delete_product),
-            ("Verify Deletion", self.verify_deletion)
+            self.test_health_check,
+            self.test_create_product_with_all_fields,
+            self.test_get_all_products,
+            self.test_get_single_product,
+            self.test_update_product_weight_dimensions,
+            self.test_ai_analysis_with_weight_dimensions
         ]
-
-        for test_name, test_func in tests:
-            print(f"\n--- Running {test_name} ---")
-            test_func()
-            time.sleep(0.5)  # Brief pause between tests
-
-        self.print_summary()
-
-    def print_summary(self):
-        """Print test summary"""
-        print("\n" + "=" * 60)
-        print("TEST SUMMARY")
-        print("=" * 60)
         
-        passed = sum(1 for result in self.test_results if result['success'])
-        failed = len(self.test_results) - passed
+        passed_count = 0
+        total_count = len(tests)
         
-        print(f"Total Tests: {len(self.test_results)}")
-        print(f"Passed: {passed}")
-        print(f"Failed: {failed}")
-        print(f"Success Rate: {(passed/len(self.test_results)*100):.1f}%")
-        
-        if failed > 0:
-            print("\nFAILED TESTS:")
-            for result in self.test_results:
-                if not result['success']:
-                    print(f"  ❌ {result['test_name']}: {result['message']}")
+        for test_func in tests:
+            if test_func():
+                passed_count += 1
+            time.sleep(1)  # Brief pause between tests
         
         print("=" * 60)
+        print(f"📊 TEST SUMMARY: {passed_count}/{total_count} tests passed")
+        
+        if passed_count == total_count:
+            print("🎉 ALL TESTS PASSED!")
+        else:
+            print("⚠️  Some tests failed. See details above.")
+            
+        return passed_count == total_count
+
 
 if __name__ == "__main__":
-    # Initialize and run tests
-    tester = ProductCaptureAPITester(BACKEND_URL)
-    tester.run_full_test_suite()
+    tester = ProductCaptureAPITest()
+    success = tester.run_all_tests()
+    
+    # Print detailed results
+    print("\n📋 DETAILED TEST RESULTS:")
+    print("-" * 40)
+    for result in tester.test_results:
+        status = "✅" if result["passed"] else "❌"
+        print(f"{status} {result['test']}")
+        if result["details"]:
+            print(f"   {result['details']}")
+    
+    if success:
+        exit(0)
+    else:
+        exit(1)

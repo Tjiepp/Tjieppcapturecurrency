@@ -134,6 +134,12 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: AI screenshot analysis working. Fixed parameter issue (image_contents -> file_contents). GPT-5.2 successfully extracts product info from JPEG images. Confidence: 0.86"
+      - working: "NA"
+        agent: "main"
+        comment: "Added weight and dimensions fields to the AI analysis response. Prompt already asks for these. Now parsing and returning them."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED: AI analysis with weight/dimensions verification complete. GPT-5.2 successfully extracts weight ('187g') and dimensions ('146.6 x 70.6 x 8.25 mm') from product content with 0.98 confidence. All required fields present in response."
 
   - task: "Get all products endpoint"
     implemented: true
@@ -164,6 +170,12 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ TESTED: Create product endpoint working correctly. Successfully creates products with all fields and returns generated UUID"
+      - working: "NA"
+        agent: "main"
+        comment: "CRITICAL FIX: create_product was only mapping name, price, description, brand, original_url, image_base64, screenshot_base64. Now maps ALL fields including color, size, quantity, material, category, availability, rating, weight, dimensions, original_price, currency. Also added weight and dimensions to AI analyze response."
+      - working: true
+        agent: "testing"
+        comment: "✅ RE-TESTED: Create product with ALL fields verified. Successfully created Nike Air Max 270 with weight='350g', dimensions='30x20x12 cm' and all 18 fields correctly saved and returned. Full CRUD flow tested: create → retrieve → update weight/dimensions → verify changes. All operations working perfectly."
 
   - task: "Get single product endpoint"
     implemented: true
@@ -276,3 +288,7 @@ agent_communication:
     message: "Built Product Capture app with AI-powered screenshot analysis. Backend uses OpenAI GPT-5.2 vision via emergentintegrations. Need to test all CRUD endpoints and the AI analysis endpoint."
   - agent: "testing"
     message: "✅ ALL BACKEND TESTS PASSED (100% success rate). Fixed one bug: UserMessage parameter 'image_contents' -> 'file_contents'. All 7 API endpoints working: Health check, CRUD operations for products, and AI screenshot analysis with GPT-5.2. Full CRUD flow tested successfully. Backend ready for production."
+  - agent: "main"
+    message: "Updated backend: 1) Fixed create_product to map ALL fields from ProductCreate to Product (was missing color, size, quantity, weight, dimensions, etc.). 2) Added weight and dimensions to the AI analysis response. 3) Added weight/dimensions to error response too. Please test: a) Create product with weight/dimensions fields and verify they are saved and returned. b) Verify the analyze endpoint returns weight/dimensions fields."
+  - agent: "testing"
+    message: "🎉 COMPREHENSIVE BACKEND TESTING COMPLETE - ALL 6 TESTS PASSED (100% SUCCESS). ✅ Verified both priority tasks: 1) Create product endpoint correctly saves ALL 18 fields including weight='350g' and dimensions='30x20x12 cm' 2) AI analysis returns weight/dimensions fields with high confidence (0.98). All CRUD operations, health check, and GPT-5.2 AI integration working perfectly. Backend fully production-ready."

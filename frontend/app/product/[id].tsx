@@ -34,6 +34,8 @@ interface Product {
   category: string;
   availability: string;
   rating: string;
+  weight: string;
+  dimensions: string;
   original_url: string;
   image_base64: string;
   screenshot_base64: string;
@@ -60,6 +62,8 @@ export default function ProductDetailScreen() {
   const [category, setCategory] = useState('');
   const [availability, setAvailability] = useState('');
   const [rating, setRating] = useState('');
+  const [weight, setWeight] = useState('');
+  const [dimensions, setDimensions] = useState('');
 
   useEffect(() => {
     fetchProduct();
@@ -81,6 +85,8 @@ export default function ProductDetailScreen() {
       setCategory(p.category || '');
       setAvailability(p.availability || '');
       setRating(p.rating || '');
+      setWeight(p.weight || '');
+      setDimensions(p.dimensions || '');
     } catch (error) {
       console.error('Error fetching product:', error);
       Alert.alert('Error', 'Could not load product details');
@@ -111,6 +117,8 @@ export default function ProductDetailScreen() {
         category: category.trim(),
         availability: availability.trim(),
         rating: rating.trim(),
+        weight: weight.trim(),
+        dimensions: dimensions.trim(),
       });
 
       setProduct(response.data);
@@ -281,6 +289,15 @@ export default function ProductDetailScreen() {
                 </View>
               </View>
 
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <EditField label="Weight" value={weight} onChangeText={setWeight} placeholder="e.g. 500g" />
+                </View>
+                <View style={styles.halfField}>
+                  <EditField label="Dimensions" value={dimensions} onChangeText={setDimensions} placeholder="e.g. 20x15x10 cm" />
+                </View>
+              </View>
+
               <EditField label="Description" value={description} onChangeText={setDescription} placeholder="Description" multiline />
 
               <TouchableOpacity
@@ -314,6 +331,8 @@ export default function ProductDetailScreen() {
                 <DetailRow icon="pricetag-outline" label="Category" value={product.category} />
                 <DetailRow icon="checkmark-circle-outline" label="Availability" value={product.availability} />
                 <DetailRow icon="star-outline" label="Rating" value={product.rating} />
+                <DetailRow icon="scale-outline" label="Weight" value={product.weight} />
+                <DetailRow icon="cube-outline" label="Dimensions" value={product.dimensions} />
               </View>
 
               {/* Description */}

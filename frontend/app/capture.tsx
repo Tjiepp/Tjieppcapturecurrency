@@ -42,6 +42,8 @@ interface ExtractedInfo {
   category: string;
   availability: string;
   rating: string;
+  weight: string;
+  dimensions: string;
   confidence: number;
 }
 
@@ -70,6 +72,8 @@ export default function CaptureScreen() {
   const [category, setCategory] = useState('');
   const [availability, setAvailability] = useState('');
   const [rating, setRating] = useState('');
+  const [weight, setWeight] = useState('');
+  const [dimensions, setDimensions] = useState('');
 
   const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
@@ -312,6 +316,8 @@ export default function CaptureScreen() {
       setCategory(info.category || '');
       setAvailability(info.availability || '');
       setRating(info.rating || '');
+      setWeight(info.weight || '');
+      setDimensions(info.dimensions || '');
       
       setShowForm(true);
 
@@ -351,6 +357,8 @@ export default function CaptureScreen() {
         category: category.trim(),
         availability: availability.trim(),
         rating: rating.trim(),
+        weight: weight.trim(),
+        dimensions: dimensions.trim(),
         original_url: url.trim(),
         image_base64: productImageUrl || '',  // Store the actual product image URL
         screenshot_base64: screenshot || '',
@@ -382,6 +390,8 @@ export default function CaptureScreen() {
     setCategory('');
     setAvailability('');
     setRating('');
+    setWeight('');
+    setDimensions('');
   };
 
   const handleLoadEnd = () => {
@@ -553,13 +563,10 @@ export default function CaptureScreen() {
               <View style={styles.priceRow}>
                 <View style={styles.priceField}>
                   <Text style={styles.fieldLabel}>Price</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    value={price}
-                    onChangeText={setPrice}
-                    placeholder="$0.00"
-                    placeholderTextColor="#6b7280"
-                  />
+                  <View style={styles.readOnlyField}>
+                    <Text style={styles.readOnlyText}>{price || 'N/A'}</Text>
+                    <Ionicons name="lock-closed" size={14} color="#6b7280" />
+                  </View>
                 </View>
                 <View style={styles.priceField}>
                   <Text style={styles.fieldLabel}>Was</Text>
@@ -645,6 +652,29 @@ export default function CaptureScreen() {
                     value={rating}
                     onChangeText={setRating}
                     placeholder="4.5/5"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.twoColRow}>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Weight</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={weight}
+                    onChangeText={setWeight}
+                    placeholder="e.g. 500g"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Dimensions</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={dimensions}
+                    onChangeText={setDimensions}
+                    placeholder="e.g. 20x15x10 cm"
                     placeholderTextColor="#6b7280"
                   />
                 </View>
@@ -737,6 +767,20 @@ export default function CaptureScreen() {
                   <Text style={styles.summaryLabel}>Quantity</Text>
                   <Text style={styles.summaryValueQuantity}>x{quantity}</Text>
                 </View>
+                
+                {weight ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Weight</Text>
+                    <Text style={styles.summaryValue}>{weight}</Text>
+                  </View>
+                ) : null}
+                
+                {dimensions ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Dimensions</Text>
+                    <Text style={styles.summaryValue}>{dimensions}</Text>
+                  </View>
+                ) : null}
                 
                 {category ? (
                   <View style={styles.summaryRow}>
@@ -928,6 +972,20 @@ const styles = StyleSheet.create({
   },
   strikePrice: {
     color: '#9ca3af',
+  },
+  readOnlyField: {
+    backgroundColor: '#141414',
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  readOnlyText: {
+    color: '#9ca3af',
+    fontSize: 16,
   },
   twoColRow: {
     flexDirection: 'row',

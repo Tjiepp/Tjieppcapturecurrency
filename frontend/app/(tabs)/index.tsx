@@ -30,6 +30,8 @@ interface Product {
   color: string;
   size: string;
   quantity: number;
+  weight: string;
+  dimensions: string;
   category: string;
   availability: string;
   original_url: string;

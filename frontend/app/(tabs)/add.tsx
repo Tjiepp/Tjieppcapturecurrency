@@ -44,6 +44,8 @@ export default function AddProductScreen() {
   const [availability, setAvailability] = useState('');
   const [rating, setRating] = useState('');
   const [productImageUrl, setProductImageUrl] = useState('');
+  const [weight, setWeight] = useState('');
+  const [dimensions, setDimensions] = useState('');
 
   const pickImageAndAnalyze = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -91,6 +93,8 @@ export default function AddProductScreen() {
         setCategory(info.category || '');
         setAvailability(info.availability || '');
         setRating(info.rating || '');
+        setWeight(info.weight || '');
+        setDimensions(info.dimensions || '');
         
         setShowForm(true);
 
@@ -156,6 +160,8 @@ export default function AddProductScreen() {
         category: category.trim(),
         availability: availability.trim(),
         rating: rating.trim(),
+        weight: weight.trim(),
+        dimensions: dimensions.trim(),
         original_url: '',
         image_base64: productImageUrl || '',
         screenshot_base64: screenshot || '',
@@ -192,6 +198,8 @@ export default function AddProductScreen() {
     setAvailability('');
     setRating('');
     setProductImageUrl('');
+    setWeight('');
+    setDimensions('');
   };
 
   const FormField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
@@ -334,7 +342,13 @@ export default function AddProductScreen() {
               
               <View style={styles.rowFields}>
                 <View style={styles.halfField}>
-                  <FormField label="Price" value={price} onChangeText={setPrice} placeholder="€0.00" />
+                  <View style={styles.formGroup}>
+                    <Text style={styles.label}>Price</Text>
+                    <View style={styles.readOnlyField}>
+                      <Text style={styles.readOnlyText}>{price || 'N/A'}</Text>
+                      <Ionicons name="lock-closed" size={14} color="#6b7280" />
+                    </View>
+                  </View>
                 </View>
                 <View style={styles.halfField}>
                   <FormField label="Original Price" value={originalPrice} onChangeText={setOriginalPrice} placeholder="Was" />
@@ -380,6 +394,16 @@ export default function AddProductScreen() {
 
               <FormField label="Material" value={material} onChangeText={setMaterial} placeholder="Material/fabric" />
               <FormField label="Category" value={category} onChangeText={setCategory} placeholder="Product category" />
+
+              <View style={styles.rowFields}>
+                <View style={styles.halfField}>
+                  <FormField label="Weight" value={weight} onChangeText={setWeight} placeholder="e.g. 500g" />
+                </View>
+                <View style={styles.halfField}>
+                  <FormField label="Dimensions" value={dimensions} onChangeText={setDimensions} placeholder="e.g. 20x15x10 cm" />
+                </View>
+              </View>
+
               <FormField label="Description" value={description} onChangeText={setDescription} placeholder="Product description" multiline />
 
               {/* Save Button */}
@@ -461,6 +485,20 @@ export default function AddProductScreen() {
                   <Text style={styles.summaryLabel}>Quantity</Text>
                   <Text style={styles.summaryValueQuantity}>x{quantity}</Text>
                 </View>
+                
+                {weight ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Weight</Text>
+                    <Text style={styles.summaryValue}>{weight}</Text>
+                  </View>
+                ) : null}
+                
+                {dimensions ? (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Dimensions</Text>
+                    <Text style={styles.summaryValue}>{dimensions}</Text>
+                  </View>
+                ) : null}
               </ScrollView>
               
               <View style={styles.modalButtons}>
@@ -719,6 +757,20 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  readOnlyField: {
+    backgroundColor: '#141414',
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  readOnlyText: {
+    color: '#9ca3af',
+    fontSize: 16,
   },
   quantityInput: {
     backgroundColor: '#1a1a1a',

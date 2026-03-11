@@ -55,6 +55,8 @@ class Product(BaseModel):
     category: str = ""
     availability: str = ""
     rating: str = ""
+    weight: str = ""  # Product/package weight
+    dimensions: str = ""  # Product/package dimensions
     original_url: str = ""
     image_base64: str = ""  # Product image
     screenshot_base64: str = ""  # Original screenshot
@@ -75,6 +77,8 @@ class ProductCreate(BaseModel):
     category: str = ""
     availability: str = ""
     rating: str = ""
+    weight: str = ""
+    dimensions: str = ""
     original_url: str = ""
     image_base64: str = ""
     screenshot_base64: str = ""
@@ -93,6 +97,8 @@ class ProductUpdate(BaseModel):
     category: Optional[str] = None
     availability: Optional[str] = None
     rating: Optional[str] = None
+    weight: Optional[str] = None
+    dimensions: Optional[str] = None
     original_url: Optional[str] = None
     image_base64: Optional[str] = None
 
@@ -170,6 +176,8 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "category": "Product category (e.g., Electronics, Clothing, Home & Garden)",
     "availability": "In Stock, Out of Stock, Limited, Pre-order, etc.",
     "rating": "Star rating and review count if shown (e.g., 4.5/5 (234 reviews))",
+    "weight": "Product or package weight (e.g., 500g, 1.2kg, 2.5 lbs)",
+    "dimensions": "Product or package dimensions (e.g., 20x15x10 cm, 8x6x4 inches)",
     "confidence": 0.0 to 1.0 based on extraction completeness
 }}
 
@@ -181,6 +189,11 @@ CRITICAL RULES FOR SIZE AND COLOR:
 - For COLOR: Extract ONLY the currently selected/active color
   - Look for: highlighted swatch, selected option, active state
   - Do NOT list all available colors, only the ONE that is selected
+
+WEIGHT AND DIMENSIONS:
+- Look for product specifications, technical details, shipping info sections
+- Extract weight in grams (g), kilograms (kg), or pounds (lbs)
+- Extract dimensions as length x width x height with units
 
 OTHER RULES:
 - Extract from BOTH the page content AND screenshot
@@ -219,6 +232,8 @@ OTHER RULES:
             "category": result.get("category", ""),
             "availability": result.get("availability", ""),
             "rating": result.get("rating", ""),
+            "weight": result.get("weight", ""),
+            "dimensions": result.get("dimensions", ""),
             "confidence": float(result.get("confidence", 0.5))
         }
         
@@ -237,6 +252,8 @@ OTHER RULES:
             "category": "",
             "availability": "",
             "rating": "",
+            "weight": "",
+            "dimensions": "",
             "confidence": 0.0
         }
     except Exception as e:
@@ -292,8 +309,19 @@ async def create_product(product: ProductCreate):
     product_obj = Product(
         name=product.name,
         price=product.price,
+        original_price=product.original_price,
+        currency=product.currency,
         description=product.description,
         brand=product.brand,
+        color=product.color,
+        size=product.size,
+        quantity=product.quantity,
+        material=product.material,
+        category=product.category,
+        availability=product.availability,
+        rating=product.rating,
+        weight=product.weight,
+        dimensions=product.dimensions,
         original_url=product.original_url,
         image_base64=product.image_base64,
         screenshot_base64=product.screenshot_base64
