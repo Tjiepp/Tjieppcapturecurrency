@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -617,6 +618,17 @@ export default function CaptureScreen() {
               <Text style={styles.modalTitle}>Confirm Order</Text>
               <Text style={styles.modalSubtitle}>Is this information correct?</Text>
               
+              {/* Product Thumbnail */}
+              {screenshot && (
+                <View style={styles.thumbnailContainer}>
+                  <Image 
+                    source={{ uri: screenshot }} 
+                    style={styles.thumbnailImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+              
               <ScrollView style={styles.modalScrollView}>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Product</Text>
@@ -958,6 +970,16 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     marginBottom: 20,
+  },
+  thumbnailContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  thumbnailImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    backgroundColor: '#262626',
   },
   modalScrollView: {
     maxHeight: 300,
