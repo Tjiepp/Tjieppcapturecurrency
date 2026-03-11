@@ -398,6 +398,16 @@ export default function CaptureScreen() {
                 </View>
               )}
 
+              {/* Instructions */}
+              {pageLoaded && (
+                <View style={styles.instructionBox}>
+                  <Ionicons name="information-circle" size={20} color="#f59e0b" />
+                  <Text style={styles.instructionText}>
+                    Select your size & color in the page above, then tap "Get Product Info"
+                  </Text>
+                </View>
+              )}
+
               {/* Big Capture Button */}
               {pageLoaded && (
                 <TouchableOpacity
@@ -418,10 +428,6 @@ export default function CaptureScreen() {
                   )}
                 </TouchableOpacity>
               )}
-
-              <Text style={styles.helpText}>
-                Scroll to see the product, then tap the button above to extract all details automatically.
-              </Text>
             </View>
           ) : (
             /* Product Form */
@@ -602,6 +608,24 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  instructionBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#292524',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    gap: 10,
+  },
+  instructionText: {
+    flex: 1,
+    color: '#fbbf24',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
   },
   captureButton: {
     flexDirection: 'row',
