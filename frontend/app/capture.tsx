@@ -96,10 +96,55 @@ export default function CaptureScreen() {
           const names = Array.from(nameElements).slice(0, 3).map(el => el.textContent?.trim()).filter(Boolean);
           const descElements = document.querySelectorAll('[class*="description"], [class*="details"], meta[name="description"]');
           const descriptions = Array.from(descElements).map(el => el.textContent?.trim() || el.getAttribute('content')).filter(Boolean);
-          const colorElements = document.querySelectorAll('[class*="color"], [class*="colour"], [data-color]');
-          const colors = Array.from(colorElements).map(el => el.textContent?.trim()).filter(Boolean);
-          const sizeElements = document.querySelectorAll('[class*="size"], [data-size], .size-selector');
-          const sizes = Array.from(sizeElements).map(el => el.textContent?.trim()).filter(Boolean);
+          
+          // Find SELECTED color - look for active/selected states
+          let selectedColor = '';
+          const colorSelectors = [
+            '[class*="color"][class*="selected"]',
+            '[class*="color"][class*="active"]',
+            '[class*="colour"][class*="selected"]',
+            '[class*="colour"][class*="active"]',
+            '[data-color][class*="selected"]',
+            '[data-color][class*="active"]',
+            'input[name*="color"]:checked + label',
+            'input[name*="colour"]:checked + label',
+            '[class*="swatch"][class*="selected"]',
+            '[class*="swatch"][class*="active"]',
+            '[aria-checked="true"][class*="color"]',
+            '[aria-selected="true"][class*="color"]'
+          ];
+          for (const selector of colorSelectors) {
+            const el = document.querySelector(selector);
+            if (el) {
+              selectedColor = el.textContent?.trim() || el.getAttribute('data-color') || el.getAttribute('title') || '';
+              if (selectedColor) break;
+            }
+          }
+          
+          // Find SELECTED size - look for active/selected states
+          let selectedSize = '';
+          const sizeSelectors = [
+            '[class*="size"][class*="selected"]',
+            '[class*="size"][class*="active"]',
+            '[data-size][class*="selected"]',
+            '[data-size][class*="active"]',
+            'input[name*="size"]:checked + label',
+            'select[name*="size"] option:checked',
+            '[class*="size-option"][class*="selected"]',
+            '[class*="size-option"][class*="active"]',
+            '[aria-checked="true"][class*="size"]',
+            '[aria-selected="true"][class*="size"]',
+            'button[class*="size"][class*="selected"]',
+            'button[class*="size"][class*="active"]',
+            'button[class*="size"][aria-pressed="true"]'
+          ];
+          for (const selector of sizeSelectors) {
+            const el = document.querySelector(selector);
+            if (el) {
+              selectedSize = el.textContent?.trim() || el.getAttribute('data-size') || el.getAttribute('value') || '';
+              if (selectedSize) break;
+            }
+          }
           
           let structuredData = {};
           const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
@@ -116,8 +161,10 @@ export default function CaptureScreen() {
           
           return JSON.stringify({
             title, metaTags, prices: prices.slice(0, 5), names: names.slice(0, 3),
-            descriptions: descriptions.slice(0, 2), colors: colors.slice(0, 5),
-            sizes: sizes.slice(0, 10), mainContent, structuredData, url: window.location.href
+            descriptions: descriptions.slice(0, 2), 
+            selectedColor: selectedColor,
+            selectedSize: selectedSize,
+            mainContent, structuredData, url: window.location.href
           });
         };
         

@@ -161,8 +161,8 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "currency": "Currency code (USD, EUR, GBP, etc.)",
     "description": "Product description - key features and details (max 300 chars)",
     "brand": "Brand/manufacturer name",
-    "color": "Color(s) available or selected",
-    "size": "Size(s) available or selected (S/M/L, dimensions, capacity, etc.)",
+    "color": "The CURRENTLY SELECTED color only (look for highlighted/active/selected state)",
+    "size": "The CURRENTLY SELECTED size only (look for highlighted/active/selected button or dropdown value)",
     "material": "Material/fabric composition if mentioned",
     "category": "Product category (e.g., Electronics, Clothing, Home & Garden)",
     "availability": "In Stock, Out of Stock, Limited, Pre-order, etc.",
@@ -170,11 +170,19 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "confidence": 0.0 to 1.0 based on extraction completeness
 }}
 
-RULES:
+CRITICAL RULES FOR SIZE AND COLOR:
+- For SIZE: Extract ONLY the currently selected/active size (the one the user has chosen)
+  - Look for: highlighted button, selected option, active state, checked radio, filled button
+  - Do NOT list all available sizes, only the ONE that is selected
+  - If size shows "38" as selected, return "38" not "36" or other sizes
+- For COLOR: Extract ONLY the currently selected/active color
+  - Look for: highlighted swatch, selected option, active state
+  - Do NOT list all available colors, only the ONE that is selected
+
+OTHER RULES:
 - Extract from BOTH the page content AND screenshot
 - Use empty string "" for any field you cannot find
 - For price, prefer sale/current price over original
-- For size/color, list what's shown or selected
 - Be specific with category (not just "Product")
 - Return ONLY valid JSON, no markdown or explanation."""
         
