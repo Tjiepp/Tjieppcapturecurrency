@@ -47,6 +47,9 @@ interface ExtractedInfo {
   confidence: number;
 }
 
+// Step type for multi-step flow
+type CaptureStep = 'select' | 'selection_done' | 'measurements_done';
+
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ url?: string }>();
   const [url, setUrl] = useState(params.url || '');
@@ -58,6 +61,11 @@ export default function CaptureScreen() {
   const [pageContent, setPageContent] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [productImageUrl, setProductImageUrl] = useState('');
+  
+  // Multi-step flow
+  const [captureStep, setCaptureStep] = useState<CaptureStep>('select');
+  const [extractingSelection, setExtractingSelection] = useState(false);
+  const [extractingMeasurements, setExtractingMeasurements] = useState(false);
   
   // Product fields
   const [name, setName] = useState('');
@@ -86,14 +94,14 @@ export default function CaptureScreen() {
     }
   }, [params.url]);
 
-  // Auto-scroll to top when form appears
+  // Auto-scroll to top when form appears or step changes
   useEffect(() => {
-    if (showForm && scrollViewRef.current) {
+    if ((showForm || captureStep !== 'select') && scrollViewRef.current) {
       setTimeout(() => {
         scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       }, 100);
     }
-  }, [showForm]);
+  }, [showForm, captureStep]);
 
   // JavaScript to inject into WebView to extract page content
   const extractPageContentJS = `
@@ -115,21 +123,15 @@ export default function CaptureScreen() {
           const descElements = document.querySelectorAll('[class*="description"], [class*="details"], meta[name="description"]');
           const descriptions = Array.from(descElements).map(el => el.textContent?.trim() || el.getAttribute('content')).filter(Boolean);
           
-          // Find SELECTED color - look for active/selected states
+          // Find SELECTED color
           let selectedColor = '';
           const colorSelectors = [
-            '[class*="color"][class*="selected"]',
-            '[class*="color"][class*="active"]',
-            '[class*="colour"][class*="selected"]',
-            '[class*="colour"][class*="active"]',
-            '[data-color][class*="selected"]',
-            '[data-color][class*="active"]',
-            'input[name*="color"]:checked + label',
-            'input[name*="colour"]:checked + label',
-            '[class*="swatch"][class*="selected"]',
-            '[class*="swatch"][class*="active"]',
-            '[aria-checked="true"][class*="color"]',
-            '[aria-selected="true"][class*="color"]'
+            '[class*="color"][class*="selected"]', '[class*="color"][class*="active"]',
+            '[class*="colour"][class*="selected"]', '[class*="colour"][class*="active"]',
+            '[data-color][class*="selected"]', '[data-color][class*="active"]',
+            'input[name*="color"]:checked + label', 'input[name*="colour"]:checked + label',
+            '[class*="swatch"][class*="selected"]', '[class*="swatch"][class*="active"]',
+            '[aria-checked="true"][class*="color"]', '[aria-selected="true"][class*="color"]'
           ];
           for (const selector of colorSelectors) {
             const el = document.querySelector(selector);
@@ -139,21 +141,15 @@ export default function CaptureScreen() {
             }
           }
           
-          // Find SELECTED size - look for active/selected states
+          // Find SELECTED size
           let selectedSize = '';
           const sizeSelectors = [
-            '[class*="size"][class*="selected"]',
-            '[class*="size"][class*="active"]',
-            '[data-size][class*="selected"]',
-            '[data-size][class*="active"]',
-            'input[name*="size"]:checked + label',
-            'select[name*="size"] option:checked',
-            '[class*="size-option"][class*="selected"]',
-            '[class*="size-option"][class*="active"]',
-            '[aria-checked="true"][class*="size"]',
-            '[aria-selected="true"][class*="size"]',
-            'button[class*="size"][class*="selected"]',
-            'button[class*="size"][class*="active"]',
+            '[class*="size"][class*="selected"]', '[class*="size"][class*="active"]',
+            '[data-size][class*="selected"]', '[data-size][class*="active"]',
+            'input[name*="size"]:checked + label', 'select[name*="size"] option:checked',
+            '[class*="size-option"][class*="selected"]', '[class*="size-option"][class*="active"]',
+            '[aria-checked="true"][class*="size"]', '[aria-selected="true"][class*="size"]',
+            'button[class*="size"][class*="selected"]', 'button[class*="size"][class*="active"]',
             'button[class*="size"][aria-pressed="true"]'
           ];
           for (const selector of sizeSelectors) {
@@ -172,7 +168,6 @@ export default function CaptureScreen() {
               if (data['@type'] === 'Product' || data['@type']?.includes('Product')) {
                 structuredData = data;
               }
-              // Also check for @graph arrays
               if (data['@graph']) {
                 data['@graph'].forEach(item => {
                   if (item['@type'] === 'Product' || item['@type']?.includes('Product')) {
@@ -183,7 +178,7 @@ export default function CaptureScreen() {
             } catch(e) {}
           });
           
-          // Extract price from structured data if available
+          // Extract price from structured data
           let structuredPrice = '';
           let structuredOriginalPrice = '';
           if (structuredData.offers) {
@@ -195,7 +190,7 @@ export default function CaptureScreen() {
             }
           }
           
-          // Also try to find price in common Dutch/EU price formats
+          // Extended price selectors
           const allPriceSelectors = [
             '[class*="price"]', '[id*="price"]', '[data-price]', 
             '.price', '.product-price', '.sale-price', '.current-price',
@@ -210,30 +205,17 @@ export default function CaptureScreen() {
             const text = el.textContent?.trim();
             const dataPrice = el.getAttribute('data-price') || el.getAttribute('content');
             return text || dataPrice;
-          }).filter(Boolean).filter(p => /[\d€$£¥]/.test(p));
+          }).filter(Boolean).filter(p => /[\\d\u20AC$\u00A3\u00A5]/.test(p));
           
           // Find the main product image
           let productImageUrl = '';
           const imageSelectors = [
-            // Schema.org product image
             '[itemprop="image"]',
-            // Common e-commerce selectors
-            '.product-image img',
-            '.product-gallery img',
-            '.product-photo img',
-            '#product-image img',
-            '[class*="product-image"] img',
-            '[class*="product-gallery"] img',
-            '[class*="main-image"] img',
-            '[class*="primary-image"] img',
-            '[data-zoom-image]',
-            // Amazon specific
-            '#landingImage',
-            '#imgBlkFront',
-            '.a-dynamic-image',
-            // General large images in product area
-            'main img[src*="product"]',
-            '.product img',
+            '.product-image img', '.product-gallery img', '.product-photo img',
+            '#product-image img', '[class*="product-image"] img', '[class*="product-gallery"] img',
+            '[class*="main-image"] img', '[class*="primary-image"] img', '[data-zoom-image]',
+            '#landingImage', '#imgBlkFront', '.a-dynamic-image',
+            'main img[src*="product"]', '.product img',
             '[class*="product"] img[src]:not([src*="icon"]):not([src*="logo"])',
           ];
           
@@ -248,7 +230,6 @@ export default function CaptureScreen() {
             }
           }
           
-          // Fallback: find largest image on page
           if (!productImageUrl) {
             const allImages = document.querySelectorAll('img[src^="http"]');
             let largestImg = null;
@@ -260,17 +241,12 @@ export default function CaptureScreen() {
                 largestImg = img;
               }
             });
-            if (largestImg) {
-              productImageUrl = largestImg.src;
-            }
+            if (largestImg) { productImageUrl = largestImg.src; }
           }
           
-          // Also check og:image meta tag
           if (!productImageUrl) {
             const ogImage = document.querySelector('meta[property="og:image"]');
-            if (ogImage) {
-              productImageUrl = ogImage.getAttribute('content') || '';
-            }
+            if (ogImage) { productImageUrl = ogImage.getAttribute('content') || ''; }
           }
           
           const mainContent = document.querySelector('main, [role="main"], .product, .product-detail')?.textContent?.substring(0, 3000) || '';
@@ -278,11 +254,8 @@ export default function CaptureScreen() {
           return JSON.stringify({
             title, metaTags, prices: allPrices.slice(0, 10), names: names.slice(0, 3),
             descriptions: descriptions.slice(0, 2), 
-            selectedColor: selectedColor,
-            selectedSize: selectedSize,
-            structuredPrice: structuredPrice,
-            structuredOriginalPrice: structuredOriginalPrice,
-            productImageUrl: productImageUrl,
+            selectedColor, selectedSize,
+            structuredPrice, structuredOriginalPrice, productImageUrl,
             mainContent, structuredData, url: window.location.href
           });
         };
@@ -306,7 +279,6 @@ export default function CaptureScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'PAGE_CONTENT') {
         setPageContent(data.content);
-        // Extract product image URL from page content
         try {
           const content = JSON.parse(data.content);
           if (content.productImageUrl) {
@@ -319,32 +291,118 @@ export default function CaptureScreen() {
     }
   };
 
-  const captureAndAnalyze = async () => {
+  // Step 1 → Step 2: Extract price, size, color from page (JS only, no AI)
+  const handleAllSelected = async () => {
+    setExtractingSelection(true);
+    
+    try {
+      // Re-inject JS to get fresh page content
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(extractPageContentJS);
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+
+      // Parse the page content for price/size/color
+      let extractedPrice = '';
+      let extractedOriginalPrice = '';
+      let extractedSize = '';
+      let extractedColor = '';
+
+      try {
+        const content = JSON.parse(pageContent);
+        
+        // Price: prefer structured data, then first price element
+        extractedPrice = content.structuredPrice || '';
+        extractedOriginalPrice = content.structuredOriginalPrice || '';
+        
+        if (!extractedPrice && content.prices && content.prices.length > 0) {
+          // Find the first price-like value
+          for (const p of content.prices) {
+            if (p && /[\d]/.test(p) && p.length < 30) {
+              extractedPrice = p;
+              break;
+            }
+          }
+        }
+        
+        // Size and Color from selected elements
+        extractedSize = content.selectedSize || '';
+        extractedColor = content.selectedColor || '';
+        
+        // Also get product image
+        if (content.productImageUrl) {
+          setProductImageUrl(content.productImageUrl);
+        }
+      } catch (e) {
+        console.log('Parse error:', e);
+      }
+
+      // If JS extraction didn't find price, do a quick AI call
+      if (!extractedPrice) {
+        try {
+          const uri = await captureRef(viewShotRef, {
+            format: 'jpg',
+            quality: 0.6,
+            result: 'base64',
+          });
+          const base64Image = `data:image/jpeg;base64,${uri}`;
+          
+          const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
+            screenshot_base64: base64Image,
+            url: url,
+            page_content: pageContent,
+          });
+          
+          const info = response.data;
+          extractedPrice = info.price || extractedPrice;
+          extractedOriginalPrice = info.original_price || extractedOriginalPrice;
+          extractedSize = info.size || extractedSize;
+          extractedColor = info.color || extractedColor;
+        } catch (e) {
+          console.log('AI fallback error:', e);
+        }
+      }
+
+      setPrice(extractedPrice);
+      setOriginalPrice(extractedOriginalPrice);
+      setSize(extractedSize);
+      setColor(extractedColor);
+      setCaptureStep('selection_done');
+      
+    } catch (error: any) {
+      console.error('Selection extraction error:', error);
+      Alert.alert('Error', 'Could not extract selection data. Please try again.');
+    } finally {
+      setExtractingSelection(false);
+    }
+  };
+
+  // Step 2 → Step 3: Extract measurements and weight (AI screenshot)
+  const handleFindMeasurements = async () => {
     if (!viewShotRef.current || !captureRef) {
       Alert.alert('Error', 'WebView not ready');
       return;
     }
 
+    setExtractingMeasurements(true);
+    
     try {
-      setAnalyzing(true);
-      
-      // Inject JS to get latest page content
+      // Re-inject JS to capture fresh content (user scrolled to specs)
       if (webViewRef.current) {
         webViewRef.current.injectJavaScript(extractPageContentJS);
         await new Promise(resolve => setTimeout(resolve, 500));
       }
       
-      // Capture screenshot
+      // Take screenshot of specs section
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
         quality: 0.8,
         result: 'base64',
       });
-
       const base64Image = `data:image/jpeg;base64,${uri}`;
       setScreenshot(base64Image);
 
-      // Send to AI
+      // Send to AI for measurements
       const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
         screenshot_base64: base64Image,
         url: url,
@@ -353,26 +411,76 @@ export default function CaptureScreen() {
 
       const info: ExtractedInfo = response.data;
       
-      // Populate form
+      // Update measurements
+      setWeight(info.weight || '');
+      setDimensions(info.dimensions || '');
+      
+      // Also update price/size/color if better values found
+      if (!price && info.price) setPrice(info.price);
+      if (!size && info.size) setSize(info.size);
+      if (!color && info.color) setColor(info.color);
+      
+      setCaptureStep('measurements_done');
+      
+    } catch (error: any) {
+      console.error('Measurements extraction error:', error);
+      Alert.alert('Error', error.response?.data?.detail || 'Could not extract measurements.');
+    } finally {
+      setExtractingMeasurements(false);
+    }
+  };
+
+  // Step 3 → Form: Get full product info
+  const handleGetProductInfo = async () => {
+    if (!viewShotRef.current || !captureRef) {
+      Alert.alert('Error', 'WebView not ready');
+      return;
+    }
+
+    setAnalyzing(true);
+    
+    try {
+      // Use the existing screenshot or take a new one
+      let base64Image = screenshot;
+      if (!base64Image) {
+        const uri = await captureRef(viewShotRef, {
+          format: 'jpg',
+          quality: 0.8,
+          result: 'base64',
+        });
+        base64Image = `data:image/jpeg;base64,${uri}`;
+        setScreenshot(base64Image);
+      }
+
+      // Full AI extraction
+      const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
+        screenshot_base64: base64Image,
+        url: url,
+        page_content: pageContent,
+      });
+
+      const info: ExtractedInfo = response.data;
+      
+      // Populate remaining fields from AI, keep user-verified values
       setName(info.name || '');
-      setPrice(info.price || '');
-      setOriginalPrice(info.original_price || '');
+      if (!price) setPrice(info.price || '');
+      if (!originalPrice) setOriginalPrice(info.original_price || '');
       setDescription(info.description || '');
       setBrand(info.brand || '');
-      setColor(info.color || '');
-      setSize(info.size || '');
+      if (!color) setColor(info.color || '');
+      if (!size) setSize(info.size || '');
       setMaterial(info.material || '');
       setCategory(info.category || '');
       setAvailability(info.availability || '');
       setRating(info.rating || '');
-      setWeight(info.weight || '');
-      setDimensions(info.dimensions || '');
+      if (!weight) setWeight(info.weight || '');
+      if (!dimensions) setDimensions(info.dimensions || '');
       
       setShowForm(true);
 
     } catch (error: any) {
-      console.error('Analysis error:', error);
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to analyze the page.');
+      console.error('Product info error:', error);
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to get product information.');
     } finally {
       setAnalyzing(false);
     }
@@ -409,11 +517,10 @@ export default function CaptureScreen() {
         weight: weight.trim(),
         dimensions: dimensions.trim(),
         original_url: url.trim(),
-        image_base64: productImageUrl || '',  // Store the actual product image URL
+        image_base64: productImageUrl || '',
         screenshot_base64: screenshot || '',
       });
 
-      // Navigate back to products list
       router.push('/(tabs)/');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Could not save the product.');
@@ -425,8 +532,8 @@ export default function CaptureScreen() {
   const handleRecapture = () => {
     setShowConfirmModal(false);
     setShowForm(false);
+    setCaptureStep('select');
     setScreenshot(null);
-    // Reset form fields
     setName('');
     setPrice('');
     setOriginalPrice('');
@@ -454,12 +561,9 @@ export default function CaptureScreen() {
   };
 
   const handleLoadStart = () => {
-    // Don't hide the button when page reloads due to user interaction
-    // Only show loading indicator if page wasn't loaded yet
     if (!pageLoaded) {
       setIsLoading(true);
     }
-    // Re-extract page content after any navigation/reload
     if (webViewRef.current && pageLoaded) {
       setTimeout(() => {
         webViewRef.current?.injectJavaScript(extractPageContentJS);
@@ -507,6 +611,18 @@ export default function CaptureScreen() {
     );
   }
 
+  // Extracted data display component
+  const ExtractedDataRow = ({ icon, label, value }: { icon: string; label: string; value: string }) => {
+    if (!value) return null;
+    return (
+      <View style={styles.extractedRow}>
+        <Ionicons name={icon as any} size={18} color="#6366f1" />
+        <Text style={styles.extractedLabel}>{label}</Text>
+        <Text style={styles.extractedValue}>{value}</Text>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -523,7 +639,7 @@ export default function CaptureScreen() {
         </View>
 
         <ScrollView ref={scrollViewRef} style={styles.flex} contentContainerStyle={styles.scrollContent}>
-          {/* WebView */}
+          {/* WebView Section - visible in all steps before form */}
           {!showForm ? (
             <View style={styles.webViewSection}>
               <View ref={viewShotRef} style={styles.webViewContainer} collapsable={false}>
@@ -552,58 +668,195 @@ export default function CaptureScreen() {
                 )}
               </View>
 
-              {/* Status */}
-              {pageLoaded && (
-                <View style={styles.statusBar}>
-                  <Ionicons 
-                    name={pageContent ? "checkmark-circle" : "hourglass-outline"} 
-                    size={16} 
-                    color={pageContent ? "#22c55e" : "#f59e0b"} 
-                  />
-                  <Text style={[styles.statusText, { color: pageContent ? "#22c55e" : "#f59e0b" }]}>
-                    {pageContent ? "Ready to capture" : "Loading page data..."}
-                  </Text>
-                </View>
+              {/* ===== STEP 1: Select size/color/quantity ===== */}
+              {captureStep === 'select' && pageLoaded && (
+                <>
+                  <View style={styles.stepInstruction}>
+                    <View style={styles.stepBadge}>
+                      <Text style={styles.stepBadgeText}>1</Text>
+                    </View>
+                    <View style={styles.stepTextContainer}>
+                      <Text style={styles.stepTitle}>Select your preferences</Text>
+                      <Text style={styles.stepSubtitle}>
+                        Choose size, color and quantity on the page above, then tap "All Selected"
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.primaryButton, extractingSelection && styles.disabledButton]}
+                    onPress={handleAllSelected}
+                    disabled={extractingSelection}
+                  >
+                    {extractingSelection ? (
+                      <>
+                        <ActivityIndicator color="#fff" size="small" />
+                        <Text style={styles.actionButtonText}>Extracting...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-done" size={22} color="#fff" />
+                        <Text style={styles.actionButtonText}>All Selected</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
 
-              {/* Instructions */}
-              {pageLoaded && (
-                <View style={styles.instructionBox}>
-                  <Ionicons name="information-circle" size={20} color="#f59e0b" />
-                  <Text style={styles.instructionText}>
-                    Select your size & color in the page above, then tap "Get Product Info"
-                  </Text>
-                </View>
+              {/* ===== STEP 2: Show extracted price/size/color + Find Measurements ===== */}
+              {captureStep === 'selection_done' && (
+                <>
+                  {/* Extracted data card */}
+                  <View style={styles.extractedCard}>
+                    <View style={styles.extractedCardHeader}>
+                      <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                      <Text style={styles.extractedCardTitle}>Selection Extracted</Text>
+                    </View>
+                    
+                    <ExtractedDataRow icon="pricetag" label="Price" value={price} />
+                    {originalPrice ? <ExtractedDataRow icon="pricetag-outline" label="Was" value={originalPrice} /> : null}
+                    <ExtractedDataRow icon="resize" label="Size" value={size} />
+                    <ExtractedDataRow icon="color-palette" label="Color" value={color} />
+                    
+                    {/* Editable Quantity */}
+                    <View style={styles.quantityRowInline}>
+                      <Ionicons name="layers" size={18} color="#6366f1" />
+                      <Text style={styles.extractedLabel}>Quantity</Text>
+                      <View style={styles.quantityControlSmall}>
+                        <TouchableOpacity 
+                          style={styles.quantityBtnSmall}
+                          onPress={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
+                        >
+                          <Ionicons name="remove" size={16} color="#fff" />
+                        </TouchableOpacity>
+                        <Text style={styles.quantityValueSmall}>{quantity}</Text>
+                        <TouchableOpacity 
+                          style={styles.quantityBtnSmall}
+                          onPress={() => setQuantity((parseInt(quantity) + 1).toString())}
+                        >
+                          <Ionicons name="add" size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepInstruction}>
+                    <View style={styles.stepBadge}>
+                      <Text style={styles.stepBadgeText}>2</Text>
+                    </View>
+                    <View style={styles.stepTextContainer}>
+                      <Text style={styles.stepTitle}>Find measurements</Text>
+                      <Text style={styles.stepSubtitle}>
+                        Scroll to the product specifications on the page above, then tap "Find Measurements"
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.secondaryButton, extractingMeasurements && styles.disabledButton]}
+                    onPress={handleFindMeasurements}
+                    disabled={extractingMeasurements}
+                  >
+                    {extractingMeasurements ? (
+                      <>
+                        <ActivityIndicator color="#fff" size="small" />
+                        <Text style={styles.actionButtonText}>Extracting measurements...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="analytics-outline" size={22} color="#fff" />
+                        <Text style={styles.actionButtonText}>Find Measurements</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
 
-              {/* Big Capture Button */}
-              {pageLoaded && (
-                <TouchableOpacity
-                  style={[styles.captureButton, analyzing && styles.disabledButton]}
-                  onPress={captureAndAnalyze}
-                  disabled={analyzing}
-                >
-                  {analyzing ? (
-                    <>
-                      <ActivityIndicator color="#fff" size="small" />
-                      <Text style={styles.captureButtonText}>Extracting product info...</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Ionicons name="sparkles" size={24} color="#fff" />
-                      <Text style={styles.captureButtonText}>Get Product Info</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+              {/* ===== STEP 3: Show all data + Get Product Info ===== */}
+              {captureStep === 'measurements_done' && (
+                <>
+                  {/* All extracted data card */}
+                  <View style={styles.extractedCard}>
+                    <View style={styles.extractedCardHeader}>
+                      <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                      <Text style={styles.extractedCardTitle}>Extracted Data</Text>
+                    </View>
+                    
+                    <ExtractedDataRow icon="pricetag" label="Price" value={price} />
+                    {originalPrice ? <ExtractedDataRow icon="pricetag-outline" label="Was" value={originalPrice} /> : null}
+                    <ExtractedDataRow icon="resize" label="Size" value={size} />
+                    <ExtractedDataRow icon="color-palette" label="Color" value={color} />
+                    
+                    {/* Quantity */}
+                    <View style={styles.quantityRowInline}>
+                      <Ionicons name="layers" size={18} color="#6366f1" />
+                      <Text style={styles.extractedLabel}>Quantity</Text>
+                      <View style={styles.quantityControlSmall}>
+                        <TouchableOpacity 
+                          style={styles.quantityBtnSmall}
+                          onPress={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
+                        >
+                          <Ionicons name="remove" size={16} color="#fff" />
+                        </TouchableOpacity>
+                        <Text style={styles.quantityValueSmall}>{quantity}</Text>
+                        <TouchableOpacity 
+                          style={styles.quantityBtnSmall}
+                          onPress={() => setQuantity((parseInt(quantity) + 1).toString())}
+                        >
+                          <Ionicons name="add" size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.extractedDivider} />
+                    
+                    <ExtractedDataRow icon="scale-outline" label="Weight" value={weight} />
+                    <ExtractedDataRow icon="cube-outline" label="Dimensions" value={dimensions} />
+                    
+                    {!weight && !dimensions && (
+                      <Text style={styles.noDataHint}>No measurements found on the page</Text>
+                    )}
+                  </View>
+
+                  <View style={styles.stepInstruction}>
+                    <View style={styles.stepBadge}>
+                      <Text style={styles.stepBadgeText}>3</Text>
+                    </View>
+                    <View style={styles.stepTextContainer}>
+                      <Text style={styles.stepTitle}>Get full product info</Text>
+                      <Text style={styles.stepSubtitle}>
+                        AI will extract the remaining product details
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.primaryButton, analyzing && styles.disabledButton]}
+                    onPress={handleGetProductInfo}
+                    disabled={analyzing}
+                  >
+                    {analyzing ? (
+                      <>
+                        <ActivityIndicator color="#fff" size="small" />
+                        <Text style={styles.actionButtonText}>Getting product info...</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={22} color="#fff" />
+                        <Text style={styles.actionButtonText}>Get Product Information</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           ) : (
-            /* Product Form */
+            /* ===== PRODUCT FORM (after all steps complete) ===== */
             <View style={styles.formSection}>
               <View style={styles.formHeader}>
                 <Text style={styles.formTitle}>Product Details</Text>
-                <TouchableOpacity onPress={() => setShowForm(false)}>
-                  <Text style={styles.recaptureText}>Re-capture</Text>
+                <TouchableOpacity onPress={handleRecapture}>
+                  <Text style={styles.recaptureText}>Start Over</Text>
                 </TouchableOpacity>
               </View>
 
@@ -657,7 +910,7 @@ export default function CaptureScreen() {
                 </View>
               </View>
 
-              {/* Quantity Field */}
+              {/* Quantity */}
               <View style={styles.quantityRow}>
                 <Text style={styles.fieldLabel}>Quantity</Text>
                 <View style={styles.quantityControl}>
@@ -688,29 +941,6 @@ export default function CaptureScreen() {
               
               <View style={styles.twoColRow}>
                 <View style={styles.halfField}>
-                  <Text style={styles.fieldLabel}>Availability</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    value={availability}
-                    onChangeText={setAvailability}
-                    placeholder="In Stock"
-                    placeholderTextColor="#6b7280"
-                  />
-                </View>
-                <View style={styles.halfField}>
-                  <Text style={styles.fieldLabel}>Rating</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    value={rating}
-                    onChangeText={setRating}
-                    placeholder="4.5/5"
-                    placeholderTextColor="#6b7280"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.twoColRow}>
-                <View style={styles.halfField}>
                   <Text style={styles.fieldLabel}>Weight</Text>
                   <TextInput
                     style={styles.fieldInput}
@@ -732,6 +962,29 @@ export default function CaptureScreen() {
                 </View>
               </View>
 
+              <View style={styles.twoColRow}>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Availability</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={availability}
+                    onChangeText={setAvailability}
+                    placeholder="In Stock"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+                <View style={styles.halfField}>
+                  <Text style={styles.fieldLabel}>Rating</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={rating}
+                    onChangeText={setRating}
+                    placeholder="4.5/5"
+                    placeholderTextColor="#6b7280"
+                  />
+                </View>
+              </View>
+
               <FormField 
                 label="Description" 
                 value={description} 
@@ -740,7 +993,6 @@ export default function CaptureScreen() {
                 multiline 
               />
 
-              {/* Save Button */}
               <TouchableOpacity
                 style={[styles.saveButton, saving && styles.disabledButton]}
                 onPress={handleSavePress}
@@ -771,7 +1023,6 @@ export default function CaptureScreen() {
               <Text style={styles.modalTitle}>Confirm Order</Text>
               <Text style={styles.modalSubtitle}>Is this information correct?</Text>
               
-              {/* Product Thumbnail - prefer product image URL over screenshot */}
               {(productImageUrl || screenshot) && (
                 <View style={styles.thumbnailContainer}>
                   <Image 
@@ -787,53 +1038,44 @@ export default function CaptureScreen() {
                   <Text style={styles.summaryLabel}>Product</Text>
                   <Text style={styles.summaryValue}>{name || '-'}</Text>
                 </View>
-                
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Brand</Text>
                   <Text style={styles.summaryValue}>{brand || '-'}</Text>
                 </View>
-                
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Price</Text>
                   <Text style={styles.summaryValuePrice}>{price || '-'}</Text>
                 </View>
-                
                 {originalPrice ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Original Price</Text>
                     <Text style={styles.summaryValueStrike}>{originalPrice}</Text>
                   </View>
                 ) : null}
-                
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Size</Text>
                   <Text style={styles.summaryValue}>{size || '-'}</Text>
                 </View>
-                
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Color</Text>
                   <Text style={styles.summaryValue}>{color || '-'}</Text>
                 </View>
-                
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Quantity</Text>
                   <Text style={styles.summaryValueQuantity}>x{quantity}</Text>
                 </View>
-                
                 {weight ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Weight</Text>
                     <Text style={styles.summaryValue}>{weight}</Text>
                   </View>
                 ) : null}
-                
                 {dimensions ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Dimensions</Text>
                     <Text style={styles.summaryValue}>{dimensions}</Text>
                   </View>
                 ) : null}
-                
                 {category ? (
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Category</Text>
@@ -843,18 +1085,11 @@ export default function CaptureScreen() {
               </ScrollView>
               
               <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={styles.recaptureButton}
-                  onPress={handleRecapture}
-                >
+                <TouchableOpacity style={styles.recaptureButton} onPress={handleRecapture}>
                   <Ionicons name="refresh" size={20} color="#f59e0b" />
                   <Text style={styles.recaptureButtonText}>No, Recapture</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.confirmButton}
-                  onPress={confirmSave}
-                >
+                <TouchableOpacity style={styles.confirmButton} onPress={confirmSave}>
                   <Ionicons name="checkmark" size={20} color="#fff" />
                   <Text style={styles.confirmButtonText}>Yes, Save to Tjiepp</Text>
                 </TouchableOpacity>
@@ -919,46 +1154,64 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
   },
-  statusBar: {
+
+  // Step instruction
+  stepInstruction: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  instructionBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#292524',
+    alignItems: 'flex-start',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 16,
+    gap: 12,
     borderWidth: 1,
-    borderColor: '#f59e0b',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    gap: 10,
+    borderColor: '#2a2a2a',
   },
-  instructionText: {
-    flex: 1,
-    color: '#fbbf24',
+  stepBadge: {
+    backgroundColor: '#6366f1',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBadgeText: {
+    color: '#fff',
     fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 20,
+    fontWeight: '700',
   },
-  captureButton: {
+  stepTextContainer: {
+    flex: 1,
+  },
+  stepTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  stepSubtitle: {
+    color: '#9ca3af',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
+  // Action buttons
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366f1',
     paddingVertical: 18,
     borderRadius: 16,
     gap: 12,
-    marginTop: 8,
+    marginTop: 12,
   },
-  captureButtonText: {
+  primaryButton: {
+    backgroundColor: '#6366f1',
+  },
+  secondaryButton: {
+    backgroundColor: '#4f46e5',
+  },
+  actionButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
@@ -966,13 +1219,88 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.7,
   },
-  helpText: {
+
+  // Extracted data card
+  extractedCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#22c55e30',
+  },
+  extractedCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  extractedCardTitle: {
+    color: '#22c55e',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  extractedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+  },
+  extractedLabel: {
+    color: '#9ca3af',
+    fontSize: 14,
+    flex: 1,
+  },
+  extractedValue: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
+  },
+  extractedDivider: {
+    height: 1,
+    backgroundColor: '#2a2a2a',
+    marginVertical: 8,
+  },
+  noDataHint: {
     color: '#6b7280',
     fontSize: 13,
-    textAlign: 'center',
-    marginTop: 16,
-    lineHeight: 20,
+    fontStyle: 'italic',
+    paddingVertical: 6,
   },
+
+  // Inline quantity
+  quantityRowInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 10,
+  },
+  quantityControlSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 2,
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  quantityBtnSmall: {
+    backgroundColor: '#6366f1',
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityValueSmall: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    minWidth: 30,
+    textAlign: 'center',
+  },
+
+  // Form styles
   formSection: {
     padding: 16,
   },
