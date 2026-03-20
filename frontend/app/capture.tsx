@@ -44,6 +44,7 @@ interface ExtractedInfo {
   rating: string;
   weight: string;
   dimensions: string;
+  delivery_available: boolean;
   confidence: number;
 }
 
@@ -358,6 +359,25 @@ export default function CaptureScreen() {
     }
   };
 
+  // Check delivery availability and show popup if not deliverable
+  const checkDelivery = (info: any, productName: string): boolean => {
+    if (info.delivery_available === false) {
+      Alert.alert(
+        'Not Available for Delivery',
+        `"${productName || 'This product'}" is not available for delivery from this webshop.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => router.push('/(tabs)/'),
+          },
+        ],
+        { cancelable: false }
+      );
+      return false;
+    }
+    return true;
+  };
+
   // Step 1 → Step 2: Extract price, size, color from page (JS only, no AI)
   const handleAllSelected = async () => {
     setExtractingSelection(true);
@@ -421,6 +441,10 @@ export default function CaptureScreen() {
           });
           
           const info = response.data;
+          if (!checkDelivery(info, info.name || '')) {
+            setExtractingSelection(false);
+            return;
+          }
           extractedPrice = info.price || extractedPrice;
           extractedOriginalPrice = info.original_price || extractedOriginalPrice;
           extractedSize = info.size || extractedSize;
@@ -497,6 +521,11 @@ export default function CaptureScreen() {
 
       const info: ExtractedInfo = response.data;
       
+      // Check delivery availability
+      if (!checkDelivery(info, info.name || name || '')) {
+        return;
+      }
+      
       // Update measurements
       setWeight(info.weight || '');
       setDimensions(info.dimensions || '');
@@ -546,6 +575,11 @@ export default function CaptureScreen() {
       });
 
       const info: ExtractedInfo = response.data;
+      
+      // Check delivery availability
+      if (!checkDelivery(info, info.name || name || '')) {
+        return;
+      }
       
       // Populate remaining fields from AI, keep user-verified values
       setName(info.name || '');

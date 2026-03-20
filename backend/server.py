@@ -202,6 +202,7 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "rating": "Star rating and review count if shown (e.g., 4.5/5 (234 reviews))",
     "weight": "Product or package weight (e.g., 500g, 1.2kg, 2.5 lbs)",
     "dimensions": "Product or package dimensions (e.g., 20x15x10 cm, 8x6x4 inches)",
+    "delivery_available": true or false - whether the product can be delivered/shipped to the customer,
     "confidence": 0.0 to 1.0 based on extraction completeness
 }}
 
@@ -231,6 +232,7 @@ OTHER RULES:
 - For price, prefer sale/current price over original
 - PRICE IS CRITICAL: Look EVERYWHERE for the price - in headers, sidebars, "add to cart" sections, product tiles, price tags. Also look in the HTML for price-related classes, meta tags, or structured data. If you see ANY number with a currency symbol or in a price-like format near the product, extract it.
 - Be specific with category (not just "Product")
+- DELIVERY: Set delivery_available to false if the page shows: "not available for delivery", "only in-store pickup", "niet leverbaar", "geen bezorging", "alleen afhalen", "not shippable", "pickup only", "out of stock", "sold out", "uitverkocht", or any similar indication that the product cannot be shipped/delivered. Default to true if there's no clear indication either way.
 - Return ONLY valid JSON, no markdown or explanation."""
         
         # Send message with image
@@ -265,6 +267,7 @@ OTHER RULES:
             "rating": result.get("rating", ""),
             "weight": result.get("weight", ""),
             "dimensions": result.get("dimensions", ""),
+            "delivery_available": result.get("delivery_available", True),
             "confidence": float(result.get("confidence", 0.5))
         }
         
