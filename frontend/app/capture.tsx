@@ -87,6 +87,10 @@ export default function CaptureScreen() {
   const viewShotRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const [specsContent, setSpecsContent] = useState('');
+  
+  // Refs to always have latest content available (avoids stale closure in async functions)
+  const pageContentRef = useRef('');
+  const specsContentRef = useRef('');
 
   useEffect(() => {
     if (params.url) {
@@ -338,6 +342,7 @@ export default function CaptureScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'PAGE_CONTENT') {
         setPageContent(data.content);
+        pageContentRef.current = data.content;
         try {
           const content = JSON.parse(data.content);
           if (content.productImageUrl) {
@@ -346,6 +351,7 @@ export default function CaptureScreen() {
         } catch (e) {}
       } else if (data.type === 'SPECS_CONTENT') {
         setSpecsContent(data.content || '');
+        specsContentRef.current = data.content || '';
       }
     } catch (e) {
       console.log('WebView message parse error:', e);
@@ -448,14 +454,22 @@ export default function CaptureScreen() {
     setExtractingMeasurements(true);
     
     try {
-      // Inject specs extraction JS to get ALL measurement data from entire page DOM
+      // First injection - extract from current page (could be a newly opened specs page)
       if (webViewRef.current) {
         webViewRef.current.injectJavaScript(extractSpecsJS);
+        await new Promise(resolve => setTimeout(resolve, 600));
         webViewRef.current.injectJavaScript(extractPageContentJS);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 600));
       }
       
-      // Take screenshot of what's currently visible
+      // Second injection - ensure we got data from the current screen
+      // (handles cases where page was still loading from navigation)
+      if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(extractSpecsJS);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Take screenshot of what's currently visible (could be the specs page)
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
         quality: 0.8,
@@ -464,10 +478,14 @@ export default function CaptureScreen() {
       const base64Image = `data:image/jpeg;base64,${uri}`;
       setScreenshot(base64Image);
 
+      // Read from REFS (not state) to get the freshly extracted data
+      const freshPageContent = pageContentRef.current;
+      const freshSpecsContent = specsContentRef.current;
+      
       // Combine page content with extracted specs for better measurement data
-      let combinedContent = pageContent;
-      if (specsContent) {
-        combinedContent = `PRODUCT SPECIFICATIONS AND MEASUREMENTS (extracted from entire page):\n${specsContent}\n\n---\nGENERAL PAGE CONTENT:\n${pageContent}`;
+      let combinedContent = freshPageContent;
+      if (freshSpecsContent) {
+        combinedContent = `PRODUCT SPECIFICATIONS AND MEASUREMENTS (extracted from entire page):\n${freshSpecsContent}\n\n---\nGENERAL PAGE CONTENT:\n${freshPageContent}`;
       }
 
       // Send to AI for measurements
@@ -624,6 +642,7 @@ export default function CaptureScreen() {
     if (webViewRef.current) {
       setTimeout(() => {
         webViewRef.current?.injectJavaScript(extractPageContentJS);
+        webViewRef.current?.injectJavaScript(extractSpecsJS);
       }, 1000);
     }
   };
@@ -635,6 +654,7 @@ export default function CaptureScreen() {
     if (webViewRef.current && pageLoaded) {
       setTimeout(() => {
         webViewRef.current?.injectJavaScript(extractPageContentJS);
+        webViewRef.current?.injectJavaScript(extractSpecsJS);
       }, 1500);
     }
   };
