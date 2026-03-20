@@ -638,9 +638,9 @@ export default function CaptureScreen() {
           <View style={{ width: 40 }} />
         </View>
 
-        <ScrollView ref={scrollViewRef} style={styles.flex} contentContainerStyle={styles.scrollContent}>
-          {/* WebView Section - visible in all steps before form */}
-          {!showForm ? (
+        {!showForm ? (
+          <>
+            {/* WebView - takes flexible space at top */}
             <View style={styles.webViewSection}>
               <View ref={viewShotRef} style={styles.webViewContainer} collapsable={false}>
                 {WebView && (
@@ -658,6 +658,7 @@ export default function CaptureScreen() {
                     javaScriptEnabled={true}
                     domStorageEnabled={true}
                     startInLoadingState={true}
+                    nestedScrollEnabled={true}
                   />
                 )}
                 {isLoading && (
@@ -667,6 +668,10 @@ export default function CaptureScreen() {
                   </View>
                 )}
               </View>
+            </View>
+
+            {/* Step content - scrollable below WebView */}
+            <ScrollView ref={scrollViewRef} style={styles.stepScrollArea} contentContainerStyle={styles.stepScrollContent} nestedScrollEnabled={true}>
 
               {/* ===== STEP 1: Select size/color/quantity ===== */}
               {captureStep === 'select' && pageLoaded && (
@@ -706,7 +711,6 @@ export default function CaptureScreen() {
               {/* ===== STEP 2: Show extracted price/size/color + Find Measurements ===== */}
               {captureStep === 'selection_done' && (
                 <>
-                  {/* Extracted data card */}
                   <View style={styles.extractedCard}>
                     <View style={styles.extractedCardHeader}>
                       <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
@@ -718,7 +722,6 @@ export default function CaptureScreen() {
                     <ExtractedDataRow icon="resize" label="Size" value={size} />
                     <ExtractedDataRow icon="color-palette" label="Color" value={color} />
                     
-                    {/* Editable Quantity */}
                     <View style={styles.quantityRowInline}>
                       <Ionicons name="layers" size={18} color="#6366f1" />
                       <Text style={styles.extractedLabel}>Quantity</Text>
@@ -775,7 +778,6 @@ export default function CaptureScreen() {
               {/* ===== STEP 3: Show all data + Get Product Info ===== */}
               {captureStep === 'measurements_done' && (
                 <>
-                  {/* All extracted data card */}
                   <View style={styles.extractedCard}>
                     <View style={styles.extractedCardHeader}>
                       <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
@@ -787,7 +789,6 @@ export default function CaptureScreen() {
                     <ExtractedDataRow icon="resize" label="Size" value={size} />
                     <ExtractedDataRow icon="color-palette" label="Color" value={color} />
                     
-                    {/* Quantity */}
                     <View style={styles.quantityRowInline}>
                       <Ionicons name="layers" size={18} color="#6366f1" />
                       <Text style={styles.extractedLabel}>Quantity</Text>
@@ -849,8 +850,10 @@ export default function CaptureScreen() {
                   </TouchableOpacity>
                 </>
               )}
-            </View>
-          ) : (
+            </ScrollView>
+          </>
+        ) : (
+          <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
             /* ===== PRODUCT FORM (after all steps complete) ===== */
             <View style={styles.formSection}>
               <View style={styles.formHeader}>
@@ -1009,7 +1012,8 @@ export default function CaptureScreen() {
               </TouchableOpacity>
             </View>
           )}
-        </ScrollView>
+          </ScrollView>
+        )}
 
         {/* Confirmation Modal */}
         <Modal
@@ -1132,10 +1136,11 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   webViewSection: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   webViewContainer: {
-    height: 400,
+    height: 380,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#fff',
@@ -1153,6 +1158,13 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 12,
     fontSize: 14,
+  },
+  stepScrollArea: {
+    flex: 1,
+  },
+  stepScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
   },
 
   // Step instruction
