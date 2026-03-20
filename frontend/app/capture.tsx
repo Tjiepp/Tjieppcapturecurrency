@@ -86,6 +86,7 @@ export default function CaptureScreen() {
   const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [specsContent, setSpecsContent] = useState('');
 
   useEffect(() => {
     if (params.url) {
@@ -274,6 +275,64 @@ export default function CaptureScreen() {
     true;
   `;
 
+  // JavaScript to extract specifications/measurements from the ENTIRE page DOM
+  const extractSpecsJS = `
+    (function() {
+      try {
+        const specSelectors = [
+          'table', '[class*="spec"]', '[class*="Spec"]',
+          '[class*="detail"]', '[class*="Detail"]',
+          '[class*="feature"]', '[class*="Feature"]',
+          '[class*="attribute"]', '[class*="kenmerken"]',
+          '[class*="specificat"]', '[class*="afmeting"]',
+          '[class*="gewicht"]', '[class*="dimension"]',
+          '[class*="weight"]', '[class*="measure"]',
+          '[class*="product-info"]', '[class*="product-detail"]',
+          'dl', 'dd', 'dt'
+        ];
+        let specsText = '';
+        const seen = new Set();
+        for (const selector of specSelectors) {
+          try {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(function(el) {
+              const text = el.textContent ? el.textContent.trim() : '';
+              if (text && text.length > 5 && text.length < 2000 && !seen.has(text)) {
+                seen.add(text);
+                specsText += text + '\\n';
+              }
+            });
+          } catch(e) {}
+        }
+        var allText = document.body ? document.body.innerText : '';
+        var lines = allText.split('\\n');
+        var keywords = ['weight','gewicht','dimension','afmeting','maat','lengte','breedte','hoogte','diepte','width','height','depth','length','cm','kg','gram','mm','liter','inhoud','volume','pakket','verpakking','package'];
+        lines.forEach(function(line) {
+          var lower = line.toLowerCase().trim();
+          if (lower.length > 3 && lower.length < 200) {
+            for (var i = 0; i < keywords.length; i++) {
+              if (lower.indexOf(keywords[i]) !== -1 && !seen.has(line.trim())) {
+                seen.add(line.trim());
+                specsText += line.trim() + '\\n';
+                break;
+              }
+            }
+          }
+        });
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'SPECS_CONTENT',
+          content: specsText.substring(0, 8000)
+        }));
+      } catch(e) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'SPECS_CONTENT',
+          content: ''
+        }));
+      }
+    })();
+    true;
+  `;
+
   const handleWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -285,6 +344,8 @@ export default function CaptureScreen() {
             setProductImageUrl(content.productImageUrl);
           }
         } catch (e) {}
+      } else if (data.type === 'SPECS_CONTENT') {
+        setSpecsContent(data.content || '');
       }
     } catch (e) {
       console.log('WebView message parse error:', e);
@@ -377,7 +438,7 @@ export default function CaptureScreen() {
     }
   };
 
-  // Step 2 → Step 3: Extract measurements and weight (AI screenshot)
+  // Step 2 → Step 3: Extract measurements and weight (AI screenshot + full DOM specs)
   const handleFindMeasurements = async () => {
     if (!viewShotRef.current || !captureRef) {
       Alert.alert('Error', 'WebView not ready');
@@ -387,13 +448,14 @@ export default function CaptureScreen() {
     setExtractingMeasurements(true);
     
     try {
-      // Re-inject JS to capture fresh content (user scrolled to specs)
+      // Inject specs extraction JS to get ALL measurement data from entire page DOM
       if (webViewRef.current) {
+        webViewRef.current.injectJavaScript(extractSpecsJS);
         webViewRef.current.injectJavaScript(extractPageContentJS);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
-      // Take screenshot of specs section
+      // Take screenshot of what's currently visible
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
         quality: 0.8,
@@ -402,11 +464,17 @@ export default function CaptureScreen() {
       const base64Image = `data:image/jpeg;base64,${uri}`;
       setScreenshot(base64Image);
 
+      // Combine page content with extracted specs for better measurement data
+      let combinedContent = pageContent;
+      if (specsContent) {
+        combinedContent = `PRODUCT SPECIFICATIONS AND MEASUREMENTS (extracted from entire page):\n${specsContent}\n\n---\nGENERAL PAGE CONTENT:\n${pageContent}`;
+      }
+
       // Send to AI for measurements
       const response = await axios.post(`${BACKEND_URL}/api/products/analyze-screenshot`, {
         screenshot_base64: base64Image,
         url: url,
-        page_content: pageContent,
+        page_content: combinedContent,
       });
 
       const info: ExtractedInfo = response.data;
@@ -750,7 +818,7 @@ export default function CaptureScreen() {
                     <View style={styles.stepTextContainer}>
                       <Text style={styles.stepTitle}>Find measurements</Text>
                       <Text style={styles.stepSubtitle}>
-                        Scroll to the product specifications on the page above, then tap "Find Measurements"
+                        Scroll to show the product specifications on the page, then tap "Find Measurements". The AI also scans the full page for measurement data.
                       </Text>
                     </View>
                   </View>
