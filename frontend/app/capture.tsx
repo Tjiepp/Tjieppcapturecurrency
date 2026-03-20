@@ -51,6 +51,69 @@ interface ExtractedInfo {
 // Step type for multi-step flow
 type CaptureStep = 'select' | 'selection_done' | 'measurements_done';
 
+// Shipping size categories
+type ShippingCategory = 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
+
+const SHIPPING_PRICES: Record<ShippingCategory, number> = {
+  'S': 5,
+  'M': 5,
+  'L': 15,
+  'XL': 24,
+  'XXL': 44,
+  'XXXL': 72,
+};
+
+const WEIGHT_PRICE_PER_100G = 0.75;
+
+// Parse dimensions string like "30x20x15 cm", "~35x25x15 cm (estimated)" etc.
+function parseDimensions(dimStr: string): { l: number; w: number; h: number; total: number } | null {
+  if (!dimStr) return null;
+  // Extract numbers from the string
+  const numbers = dimStr.match(/[\d]+[.,]?[\d]*/g);
+  if (!numbers || numbers.length < 3) return null;
+  const vals = numbers.slice(0, 3).map(n => parseFloat(n.replace(',', '.')));
+  // Sort descending so l >= w >= h
+  vals.sort((a, b) => b - a);
+  return { l: vals[0], w: vals[1], h: vals[2], total: vals[0] + vals[1] + vals[2] };
+}
+
+// Parse weight string like "500g", "1.2 kg", "~350g (estimated)", "2.5 lbs" etc.
+function parseWeightGrams(weightStr: string): number {
+  if (!weightStr) return 0;
+  const numMatch = weightStr.match(/([\d]+[.,]?[\d]*)/);
+  if (!numMatch) return 0;
+  const value = parseFloat(numMatch[1].replace(',', '.'));
+  const lower = weightStr.toLowerCase();
+  if (lower.includes('kg') || lower.includes('kilo')) return value * 1000;
+  if (lower.includes('lbs') || lower.includes('pound')) return value * 453.59;
+  if (lower.includes('g') || lower.includes('gram')) return value;
+  // Default: if value > 50, assume grams; otherwise kg
+  return value > 50 ? value : value * 1000;
+}
+
+// Determine shipping category based on dimensions (sum of L+W+H in cm)
+function getShippingCategory(dimStr: string): ShippingCategory {
+  const dims = parseDimensions(dimStr);
+  if (!dims) return 'M'; // Default if can't parse
+  const total = dims.total;
+  if (total <= 60) return 'S';
+  if (total <= 90) return 'M';
+  if (total <= 120) return 'L';
+  if (total <= 175) return 'XL';
+  if (total <= 240) return 'XXL';
+  return 'XXXL';
+}
+
+// Calculate total delivery price
+function calculateDeliveryPrice(dimStr: string, weightStr: string): { category: ShippingCategory; sizePrice: number; weightPrice: number; totalPrice: number; weightGrams: number } {
+  const category = getShippingCategory(dimStr);
+  const sizePrice = SHIPPING_PRICES[category];
+  const weightGrams = parseWeightGrams(weightStr);
+  const weightPrice = Math.round((weightGrams / 100) * WEIGHT_PRICE_PER_100G * 100) / 100;
+  const totalPrice = Math.round((sizePrice + weightPrice) * 100) / 100;
+  return { category, sizePrice, weightPrice, totalPrice, weightGrams };
+}
+
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ url?: string }>();
   const [url, setUrl] = useState(params.url || '');
@@ -941,6 +1004,41 @@ export default function CaptureScreen() {
                     )}
                   </View>
 
+                  {/* Delivery Price Card */}
+                  {(() => {
+                    const delivery = calculateDeliveryPrice(dimensions, weight);
+                    return (
+                      <View style={styles.deliveryCard}>
+                        <View style={styles.deliveryHeader}>
+                          <Ionicons name="car-outline" size={22} color="#f59e0b" />
+                          <Text style={styles.deliveryTitle}>Delivery Estimate</Text>
+                        </View>
+                        
+                        <View style={styles.deliveryCategoryRow}>
+                          <Text style={styles.deliveryCategoryLabel}>Package Category</Text>
+                          <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryBadgeText}>{delivery.category}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.deliveryBreakdown}>
+                          <View style={styles.deliveryLine}>
+                            <Text style={styles.deliveryLineLabel}>Size fee ({delivery.category})</Text>
+                            <Text style={styles.deliveryLineValue}>€{delivery.sizePrice.toFixed(2)}</Text>
+                          </View>
+                          <View style={styles.deliveryLine}>
+                            <Text style={styles.deliveryLineLabel}>Weight fee ({delivery.weightGrams > 0 ? `${delivery.weightGrams}g × €0.0075/g` : 'unknown weight'})</Text>
+                            <Text style={styles.deliveryLineValue}>€{delivery.weightPrice.toFixed(2)}</Text>
+                          </View>
+                          <View style={[styles.deliveryLine, styles.deliveryTotalLine]}>
+                            <Text style={styles.deliveryTotalLabel}>Total Delivery</Text>
+                            <Text style={styles.deliveryTotalValue}>€{delivery.totalPrice.toFixed(2)}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })()}
+
                   <View style={styles.stepInstruction}>
                     <View style={styles.stepBadge}>
                       <Text style={styles.stepBadgeText}>3</Text>
@@ -1208,6 +1306,21 @@ export default function CaptureScreen() {
                     <Text style={styles.summaryValue}>{category}</Text>
                   </View>
                 ) : null}
+                
+                {/* Delivery Price in confirmation */}
+                {(() => {
+                  const delivery = calculateDeliveryPrice(dimensions, weight);
+                  return (
+                    <View style={[styles.summaryRow, { borderBottomWidth: 0, paddingTop: 16 }]}>
+                      <Text style={[styles.summaryLabel, { fontWeight: '700', color: '#f59e0b' }]}>
+                        Delivery ({delivery.category})
+                      </Text>
+                      <Text style={[styles.summaryValuePrice, { color: '#f59e0b' }]}>
+                        €{delivery.totalPrice.toFixed(2)}
+                      </Text>
+                    </View>
+                  );
+                })()}
               </ScrollView>
               
               <View style={styles.modalButtons}>
@@ -1402,6 +1515,85 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontStyle: 'italic',
     paddingVertical: 6,
+  },
+
+  // Delivery card
+  deliveryCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#f59e0b30',
+  },
+  deliveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  deliveryTitle: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  deliveryCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  deliveryCategoryLabel: {
+    color: '#9ca3af',
+    fontSize: 14,
+  },
+  categoryBadge: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  categoryBadgeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  deliveryBreakdown: {
+    backgroundColor: '#0f0f0f',
+    borderRadius: 10,
+    padding: 12,
+  },
+  deliveryLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  deliveryLineLabel: {
+    color: '#9ca3af',
+    fontSize: 13,
+    flex: 1,
+  },
+  deliveryLineValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deliveryTotalLine: {
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a2a',
+    marginTop: 4,
+    paddingTop: 10,
+  },
+  deliveryTotalLabel: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  deliveryTotalValue: {
+    color: '#f59e0b',
+    fontSize: 20,
+    fontWeight: '800',
   },
 
   // Inline quantity
