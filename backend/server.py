@@ -218,6 +218,12 @@ WEIGHT AND DIMENSIONS:
 - Look for product specifications, technical details, shipping info sections
 - Extract weight in grams (g), kilograms (kg), or pounds (lbs)
 - Extract dimensions as length x width x height with units
+- IMPORTANT: If NO weight or dimensions are mentioned on the page, you MUST ESTIMATE them based on the product type and image:
+  - Analyze what the product is (e.g., shoes, electronics, clothing, appliance)
+  - Provide realistic ESTIMATED average package dimensions and weight for that product type
+  - Use your knowledge of typical packaging sizes for similar products
+  - Format estimates the same way as extracted values (e.g., "~1.2 kg (estimated)", "~35x25x15 cm (estimated)")
+  - Always include "(estimated)" when the values are not from the page
 
 OTHER RULES:
 - Extract from BOTH the page content AND screenshot
