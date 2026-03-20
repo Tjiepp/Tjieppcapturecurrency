@@ -200,8 +200,8 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "category": "Product category (e.g., Electronics, Clothing, Home & Garden)",
     "availability": "In Stock, Out of Stock, Limited, Pre-order, etc.",
     "rating": "Star rating and review count if shown (e.g., 4.5/5 (234 reviews))",
-    "weight": "Product or package weight (e.g., 500g, 1.2kg, 2.5 lbs)",
-    "dimensions": "Product or package dimensions (e.g., 20x15x10 cm, 8x6x4 inches)",
+    "weight": "PACKAGE weight only (verpakkingsgewicht) - just the number and unit, e.g. 8.2 kg, 500g",
+    "dimensions": "PACKAGE dimensions only (verpakkingsafmetingen) - just LxWxH with unit, e.g. 58x43x37 cm",
     "delivery_available": true or false - whether the product can be delivered/shipped to the customer,
     "confidence": 0.0 to 1.0 based on extraction completeness
 }}
@@ -216,10 +216,12 @@ CRITICAL RULES FOR SIZE AND COLOR:
   - Do NOT list all available colors, only the ONE that is selected
 
 WEIGHT AND DIMENSIONS:
-- Look for product specifications, technical details, shipping info sections
+- ALWAYS look for PACKAGE weight (verpakkingsgewicht) and PACKAGE dimensions (verpakkingsafmetingen), NOT just the product itself
+- Prefer shipping/package specs over product specs: look for "verpakkingsgewicht", "brutogewicht", "shipping weight", "package weight", "verpakkingsafmetingen", "package dimensions", "shipping dimensions", "afmetingen verpakking"
+- If only product weight/dimensions are available, use those as a fallback
 - Extract weight in grams (g), kilograms (kg), or pounds (lbs)
 - Extract dimensions as length x width x height with units
-- IMPORTANT: If NO weight or dimensions are mentioned on the page, you MUST ESTIMATE them based on the product type and image:
+- IMPORTANT: If NO weight or dimensions are mentioned on the page, you MUST ESTIMATE the PACKAGE weight and dimensions based on the product type and image:
   - Analyze what the product is (e.g., shoes, electronics, clothing, appliance)
   - Provide realistic ESTIMATED average package dimensions and weight for that product type
   - Use your knowledge of typical packaging sizes for similar products

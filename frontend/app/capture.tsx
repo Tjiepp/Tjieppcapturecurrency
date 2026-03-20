@@ -104,14 +104,13 @@ function getShippingCategory(dimStr: string): ShippingCategory {
   return 'XXXL';
 }
 
-// Calculate total delivery price
-function calculateDeliveryPrice(dimStr: string, weightStr: string): { category: ShippingCategory; sizePrice: number; weightPrice: number; totalPrice: number; weightGrams: number } {
+// Calculate delivery prices (separate, not summed)
+function calculateDeliveryPrices(dimStr: string, weightStr: string): { category: ShippingCategory; sizePrice: number; weightPrice: number; weightGrams: number; standardPrice: number } {
   const category = getShippingCategory(dimStr);
   const sizePrice = SHIPPING_PRICES[category];
   const weightGrams = parseWeightGrams(weightStr);
   const weightPrice = Math.round((weightGrams / 100) * WEIGHT_PRICE_PER_100G * 100) / 100;
-  const totalPrice = Math.round((sizePrice + weightPrice) * 100) / 100;
-  return { category, sizePrice, weightPrice, totalPrice, weightGrams };
+  return { category, sizePrice, weightPrice, weightGrams, standardPrice: 5 };
 }
 
 export default function CaptureScreen() {
@@ -1006,16 +1005,16 @@ export default function CaptureScreen() {
 
                   {/* Delivery Price Card */}
                   {(() => {
-                    const delivery = calculateDeliveryPrice(dimensions, weight);
+                    const delivery = calculateDeliveryPrices(dimensions, weight);
                     return (
                       <View style={styles.deliveryCard}>
                         <View style={styles.deliveryHeader}>
                           <Ionicons name="car-outline" size={22} color="#f59e0b" />
-                          <Text style={styles.deliveryTitle}>Delivery Estimate</Text>
+                          <Text style={styles.deliveryTitle}>Delivery Prices</Text>
                         </View>
                         
                         <View style={styles.deliveryCategoryRow}>
-                          <Text style={styles.deliveryCategoryLabel}>Package Category</Text>
+                          <Text style={styles.deliveryCategoryLabel}>Verpakkingscategorie</Text>
                           <View style={styles.categoryBadge}>
                             <Text style={styles.categoryBadgeText}>{delivery.category}</Text>
                           </View>
@@ -1023,16 +1022,27 @@ export default function CaptureScreen() {
 
                         <View style={styles.deliveryBreakdown}>
                           <View style={styles.deliveryLine}>
-                            <Text style={styles.deliveryLineLabel}>Size fee ({delivery.category})</Text>
+                            <View style={styles.deliveryLineLabelRow}>
+                              <Ionicons name="bicycle-outline" size={16} color="#9ca3af" />
+                              <Text style={styles.deliveryLineLabel}>Standaard bezorging NL</Text>
+                            </View>
+                            <Text style={styles.deliveryLineValue}>€{delivery.standardPrice.toFixed(2)}</Text>
+                          </View>
+                          
+                          <View style={[styles.deliveryLine, styles.deliveryLineBorder]}>
+                            <View style={styles.deliveryLineLabelRow}>
+                              <Ionicons name="cube-outline" size={16} color="#9ca3af" />
+                              <Text style={styles.deliveryLineLabel}>Verpakkingsafmetingen ({delivery.category})</Text>
+                            </View>
                             <Text style={styles.deliveryLineValue}>€{delivery.sizePrice.toFixed(2)}</Text>
                           </View>
-                          <View style={styles.deliveryLine}>
-                            <Text style={styles.deliveryLineLabel}>Weight fee ({delivery.weightGrams > 0 ? `${delivery.weightGrams}g × €0.0075/g` : 'unknown weight'})</Text>
+                          
+                          <View style={[styles.deliveryLine, styles.deliveryLineBorder]}>
+                            <View style={styles.deliveryLineLabelRow}>
+                              <Ionicons name="scale-outline" size={16} color="#9ca3af" />
+                              <Text style={styles.deliveryLineLabel}>Verpakkingsgewicht ({delivery.weightGrams > 0 ? `${delivery.weightGrams}g` : '?'})</Text>
+                            </View>
                             <Text style={styles.deliveryLineValue}>€{delivery.weightPrice.toFixed(2)}</Text>
-                          </View>
-                          <View style={[styles.deliveryLine, styles.deliveryTotalLine]}>
-                            <Text style={styles.deliveryTotalLabel}>Total Delivery</Text>
-                            <Text style={styles.deliveryTotalValue}>€{delivery.totalPrice.toFixed(2)}</Text>
                           </View>
                         </View>
                       </View>
@@ -1307,18 +1317,24 @@ export default function CaptureScreen() {
                   </View>
                 ) : null}
                 
-                {/* Delivery Price in confirmation */}
+                {/* Delivery Prices in confirmation */}
                 {(() => {
-                  const delivery = calculateDeliveryPrice(dimensions, weight);
+                  const delivery = calculateDeliveryPrices(dimensions, weight);
                   return (
-                    <View style={[styles.summaryRow, { borderBottomWidth: 0, paddingTop: 16 }]}>
-                      <Text style={[styles.summaryLabel, { fontWeight: '700', color: '#f59e0b' }]}>
-                        Delivery ({delivery.category})
-                      </Text>
-                      <Text style={[styles.summaryValuePrice, { color: '#f59e0b' }]}>
-                        €{delivery.totalPrice.toFixed(2)}
-                      </Text>
-                    </View>
+                    <>
+                      <View style={[styles.summaryRow, { paddingTop: 14 }]}>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Standaard bezorging NL</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>€{delivery.standardPrice.toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verpakkingsafmetingen ({delivery.category})</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>€{delivery.sizePrice.toFixed(2)}</Text>
+                      </View>
+                      <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verpakkingsgewicht</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>€{delivery.weightPrice.toFixed(2)}</Text>
+                      </View>
+                    </>
                   );
                 })()}
               </ScrollView>
@@ -1574,26 +1590,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flex: 1,
   },
-  deliveryLineValue: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  deliveryLineLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
   },
-  deliveryTotalLine: {
+  deliveryLineValue: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  deliveryLineBorder: {
     borderTopWidth: 1,
     borderTopColor: '#2a2a2a',
-    marginTop: 4,
-    paddingTop: 10,
-  },
-  deliveryTotalLabel: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  deliveryTotalValue: {
-    color: '#f59e0b',
-    fontSize: 20,
-    fontWeight: '800',
+    marginTop: 2,
+    paddingTop: 8,
   },
 
   // Inline quantity
