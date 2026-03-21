@@ -491,7 +491,7 @@ export default function CaptureScreen() {
         try {
           const uri = await captureRef(viewShotRef, {
             format: 'jpg',
-            quality: 0.6,
+            quality: 0.4,
             result: 'base64',
           });
           const base64Image = `data:image/jpeg;base64,${uri}`;
@@ -558,7 +558,7 @@ export default function CaptureScreen() {
       // Take screenshot of what's currently visible (could be the specs page)
       const uri = await captureRef(viewShotRef, {
         format: 'jpg',
-        quality: 0.8,
+        quality: 0.5,
         result: 'base64',
       });
       const base64Image = `data:image/jpeg;base64,${uri}`;
@@ -622,7 +622,7 @@ export default function CaptureScreen() {
       if (!base64Image) {
         const uri = await captureRef(viewShotRef, {
           format: 'jpg',
-          quality: 0.8,
+          quality: 0.5,
           result: 'base64',
         });
         base64Image = `data:image/jpeg;base64,${uri}`;

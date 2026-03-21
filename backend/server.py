@@ -137,11 +137,8 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"product-analysis-{uuid.uuid4()}",
-            system_message="""You are a product information extraction expert. 
-            Analyze product screenshots and page content to extract ALL available product details.
-            Always respond with valid JSON only, no other text.
-            Be thorough - extract every detail you can find."""
-        ).with_model("openai", "gpt-5.2")
+            system_message="""You are a product info extraction expert. Extract product details from screenshots and page content. Always respond with valid JSON only."""
+        ).with_model("openai", "gpt-4o-mini")
         
         # Create image content
         image_content = ImageContent(image_base64=screenshot_base64)
@@ -172,8 +169,8 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
             except (json.JSONDecodeError, TypeError):
                 pass
             
-            # Truncate page content (increase limit to 12000 chars)
-            truncated_content = page_content[:12000] if len(page_content) > 12000 else page_content
+            # Truncate page content to 6000 chars (optimized for cost)
+            truncated_content = page_content[:6000] if len(page_content) > 6000 else page_content
             page_context = f"""
 {extracted_prices_hint}
 
