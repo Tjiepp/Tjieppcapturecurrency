@@ -45,6 +45,7 @@ interface ExtractedInfo {
   weight: string;
   dimensions: string;
   delivery_available: boolean;
+  delivery_cost: string;
   confidence: number;
 }
 
@@ -105,12 +106,12 @@ function getShippingCategory(dimStr: string): ShippingCategory {
 }
 
 // Calculate delivery prices (separate, not summed)
-function calculateDeliveryPrices(dimStr: string, weightStr: string): { category: ShippingCategory; sizePrice: number; weightPrice: number; weightGrams: number; standardPrice: number } {
+function calculateDeliveryPrices(dimStr: string, weightStr: string): { category: ShippingCategory; sizePrice: number; weightPrice: number; weightGrams: number } {
   const category = getShippingCategory(dimStr);
   const sizePrice = SHIPPING_PRICES[category];
   const weightGrams = parseWeightGrams(weightStr);
   const weightPrice = Math.round((weightGrams / 100) * WEIGHT_PRICE_PER_100G * 100) / 100;
-  return { category, sizePrice, weightPrice, weightGrams, standardPrice: 5 };
+  return { category, sizePrice, weightPrice, weightGrams };
 }
 
 export default function CaptureScreen() {
@@ -145,6 +146,7 @@ export default function CaptureScreen() {
   const [rating, setRating] = useState('');
   const [weight, setWeight] = useState('');
   const [dimensions, setDimensions] = useState('');
+  const [deliveryCost, setDeliveryCost] = useState('');
 
   const webViewRef = useRef<any>(null);
   const viewShotRef = useRef<View>(null);
@@ -373,7 +375,7 @@ export default function CaptureScreen() {
         }
         var allText = document.body ? document.body.innerText : '';
         var lines = allText.split('\\n');
-        var keywords = ['weight','gewicht','dimension','afmeting','maat','lengte','breedte','hoogte','diepte','width','height','depth','length','cm','kg','gram','mm','liter','inhoud','volume','pakket','verpakking','package'];
+        var keywords = ['weight','gewicht','dimension','afmeting','maat','lengte','breedte','hoogte','diepte','width','height','depth','length','cm','kg','gram','mm','liter','inhoud','volume','pakket','verpakking','package','verzend','bezorg','shipping','delivery','levering','porto','freight'];
         lines.forEach(function(line) {
           var lower = line.toLowerCase().trim();
           if (lower.length > 3 && lower.length < 200) {
@@ -591,6 +593,7 @@ export default function CaptureScreen() {
       // Update measurements
       setWeight(info.weight || '');
       setDimensions(info.dimensions || '');
+      setDeliveryCost(info.delivery_cost || '');
       
       // Also update price/size/color if better values found
       if (!price && info.price) setPrice(info.price);
@@ -730,6 +733,7 @@ export default function CaptureScreen() {
     setRating('');
     setWeight('');
     setDimensions('');
+    setDeliveryCost('');
   };
 
   const handleLoadEnd = () => {
@@ -1024,9 +1028,9 @@ export default function CaptureScreen() {
                           <View style={styles.deliveryLine}>
                             <View style={styles.deliveryLineLabelRow}>
                               <Ionicons name="bicycle-outline" size={16} color="#9ca3af" />
-                              <Text style={styles.deliveryLineLabel}>Standaard bezorging NL</Text>
+                              <Text style={styles.deliveryLineLabel}>Verzendkosten webshop (NL)</Text>
                             </View>
-                            <Text style={styles.deliveryLineValue}>€{delivery.standardPrice.toFixed(2)}</Text>
+                            <Text style={styles.deliveryLineValue}>{deliveryCost || 'Onbekend'}</Text>
                           </View>
                           
                           <View style={[styles.deliveryLine, styles.deliveryLineBorder]}>
@@ -1323,8 +1327,8 @@ export default function CaptureScreen() {
                   return (
                     <>
                       <View style={[styles.summaryRow, { paddingTop: 14 }]}>
-                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Standaard bezorging NL</Text>
-                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>€{delivery.standardPrice.toFixed(2)}</Text>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verzendkosten webshop (NL)</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>{deliveryCost || 'Onbekend'}</Text>
                       </View>
                       <View style={styles.summaryRow}>
                         <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verpakkingsafmetingen ({delivery.category})</Text>

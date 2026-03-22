@@ -200,6 +200,7 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "weight": "PACKAGE weight only (verpakkingsgewicht) - just the number and unit, e.g. 8.2 kg, 500g",
     "dimensions": "PACKAGE dimensions only (verpakkingsafmetingen) - just LxWxH with unit, e.g. 58x43x37 cm",
     "delivery_available": true or false - whether the product can be delivered/shipped to the customer,
+    "delivery_cost": "Delivery/shipping cost within the Netherlands (e.g., €5.95, Gratis, Free). Look for: verzendkosten, bezorgkosten, shipping cost, delivery fee",
     "confidence": 0.0 to 1.0 based on extraction completeness
 }}
 
@@ -267,6 +268,7 @@ OTHER RULES:
             "weight": result.get("weight", ""),
             "dimensions": result.get("dimensions", ""),
             "delivery_available": result.get("delivery_available", True),
+            "delivery_cost": result.get("delivery_cost", ""),
             "confidence": float(result.get("confidence", 0.5))
         }
         
