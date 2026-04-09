@@ -66,15 +66,35 @@ const SHIPPING_PRICES: Record<ShippingCategory, number> = {
 
 const WEIGHT_PRICE_PER_100G = 0.75;
 
-// Parse dimensions string like "30x20x15 cm", "~35x25x15 cm (estimated)" etc.
+// Parse dimensions string like "30x20x15 cm", "~35x25x15 cm (estimated)", "580x430x370 mm" etc.
 function parseDimensions(dimStr: string): { l: number; w: number; h: number; total: number } | null {
   if (!dimStr) return null;
   // Extract numbers from the string
   const numbers = dimStr.match(/[\d]+[.,]?[\d]*/g);
   if (!numbers || numbers.length < 3) return null;
-  const vals = numbers.slice(0, 3).map(n => parseFloat(n.replace(',', '.')));
+  let vals = numbers.slice(0, 3).map(n => parseFloat(n.replace(',', '.')));
   // Sort descending so l >= w >= h
   vals.sort((a, b) => b - a);
+  
+  const lower = dimStr.toLowerCase();
+  
+  // Convert mm to cm
+  if (lower.includes('mm') && !lower.includes('cm')) {
+    vals = vals.map(v => v / 10);
+  }
+  // Convert m to cm (if values are small like 0.58 x 0.43 x 0.37)
+  if (lower.includes(' m') && !lower.includes('mm') && !lower.includes('cm') && vals[0] < 5) {
+    vals = vals.map(v => v * 100);
+  }
+  // Convert inches to cm
+  if (lower.includes('inch') || lower.includes('"') || lower.includes('in')) {
+    vals = vals.map(v => v * 2.54);
+  }
+  // Heuristic: if all values > 100, probably in mm even without unit label
+  if (vals[0] > 200 && vals[1] > 100 && vals[2] > 100) {
+    vals = vals.map(v => v / 10);
+  }
+  
   return { l: vals[0], w: vals[1], h: vals[2], total: vals[0] + vals[1] + vals[2] };
 }
 
