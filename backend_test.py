@@ -1,476 +1,239 @@
 #!/usr/bin/env python3
 """
-Backend API Test Suite for Product Capture App
-Tests all CRUD operations and AI analysis endpoints
+Backend Testing Script for Product Capture App
+Tests the specific requirements from the review request:
+1. Health check endpoint
+2. Create product with shipping fields
+3. Get products to verify shipping fields
+4. Delete test product
 """
 
 import requests
 import json
-import time
-import base64
-from io import BytesIO
-from PIL import Image
-import random
-import string
+import sys
+from datetime import datetime
 
-# Test Configuration
-BASE_URL = "https://product-capture-3.preview.emergentagent.com/api"
+# Backend URL from frontend .env
+BACKEND_URL = "https://product-capture-3.preview.emergentagent.com/api"
 
-class ProductCaptureAPITest:
-    def __init__(self):
-        self.base_url = BASE_URL
-        self.created_product_id = None
-        self.test_results = []
+def test_health_check():
+    """Test the health check endpoint"""
+    print("🔍 Testing Health Check Endpoint...")
+    try:
+        response = requests.get(f"{BACKEND_URL}/health", timeout=10)
+        print(f"Status Code: {response.status_code}")
+        print(f"Response: {response.json()}")
         
-    def log_result(self, test_name, passed, details):
-        """Log test result"""
-        status = "✅ PASS" if passed else "❌ FAIL"
-        self.test_results.append({
-            "test": test_name,
-            "passed": passed,
-            "details": details
-        })
-        print(f"{status}: {test_name}")
-        if details:
-            print(f"    Details: {details}")
-        print()
-    
-    def generate_test_image(self):
-        """Generate a simple test image as base64"""
-        # Create a simple 100x100 red square image
-        img = Image.new('RGB', (100, 100), color='red')
-        buffer = BytesIO()
-        img.save(buffer, format='JPEG')
-        img_base64 = base64.b64encode(buffer.getvalue()).decode()
-        return img_base64
-    
-    def test_health_check(self):
-        """Test the health check endpoint"""
-        try:
-            response = requests.get(f"{self.base_url}/health", timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if "status" in data and data["status"] == "healthy":
-                    self.log_result("Health Check", True, f"Status: {data['status']}")
-                    return True
-                else:
-                    self.log_result("Health Check", False, f"Unexpected response: {data}")
-                    return False
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "healthy":
+                print("✅ Health check passed - status is healthy")
+                return True
             else:
-                self.log_result("Health Check", False, f"Status code: {response.status_code}")
+                print(f"❌ Health check failed - unexpected status: {data.get('status')}")
                 return False
-                
-        except Exception as e:
-            self.log_result("Health Check", False, f"Exception: {str(e)}")
+        else:
+            print(f"❌ Health check failed - status code: {response.status_code}")
             return False
+    except Exception as e:
+        print(f"❌ Health check failed with error: {e}")
+        return False
+
+def test_create_product_with_shipping():
+    """Test creating a product with shipping fields"""
+    print("\n🔍 Testing Create Product with Shipping Fields...")
     
-    def test_create_product_with_all_fields(self):
-        """Test creating a product with ALL fields including weight and dimensions"""
-        test_data = {
-            "name": "Nike Air Max 270",
-            "price": "$149.99",
-            "original_price": "$179.99",
-            "currency": "USD",
-            "description": "Lifestyle running shoes with Max Air cushioning",
-            "brand": "Nike",
-            "color": "Black/White",
-            "size": "42",
-            "quantity": 2,
-            "material": "Mesh and synthetic upper",
-            "category": "Footwear",
-            "availability": "In Stock",
-            "rating": "4.5/5 (1,234 reviews)",
-            "weight": "350g",
-            "dimensions": "30x20x12 cm",
-            "original_url": "https://example.com/nike-air-max-270",
-            "image_base64": self.generate_test_image(),
-            "screenshot_base64": self.generate_test_image()
-        }
+    # Test product data with all shipping fields as specified in the review request
+    test_product = {
+        "name": "Test Product",
+        "price": "€29.99",
+        "weight": "500g",
+        "dimensions": "30x20x15 cm",
+        "shipping_category": "M",
+        "delivery_cost_webshop": "€5.95",
+        "delivery_cost_size": "€5.00",
+        "delivery_cost_weight": "€3.75",
+        "description": "Test product for shipping verification",
+        "brand": "Test Brand",
+        "category": "Test Category",
+        "original_url": "https://test.example.com/product"
+    }
+    
+    try:
+        response = requests.post(
+            f"{BACKEND_URL}/products", 
+            json=test_product,
+            headers={"Content-Type": "application/json"},
+            timeout=10
+        )
+        print(f"Status Code: {response.status_code}")
         
-        try:
-            response = requests.post(
-                f"{self.base_url}/products",
-                json=test_data,
-                headers={"Content-Type": "application/json"},
-                timeout=15
-            )
+        if response.status_code == 200:
+            created_product = response.json()
+            print(f"✅ Product created successfully with ID: {created_product.get('id')}")
             
-            if response.status_code == 200:
-                created_product = response.json()
-                self.created_product_id = created_product.get("id")
-                
-                # Verify ALL fields are present in response
-                missing_fields = []
-                for field, expected_value in test_data.items():
-                    if field in created_product:
-                        actual_value = created_product[field]
-                        if actual_value != expected_value:
-                            missing_fields.append(f"{field}: expected '{expected_value}', got '{actual_value}'")
-                    else:
-                        missing_fields.append(f"{field}: missing from response")
-                
-                # Check for required system fields
-                required_system_fields = ["id", "created_at", "updated_at"]
-                for field in required_system_fields:
-                    if field not in created_product:
-                        missing_fields.append(f"{field}: system field missing")
-                
-                if not missing_fields:
-                    # Specifically verify weight and dimensions
-                    weight_ok = created_product.get("weight") == "350g"
-                    dimensions_ok = created_product.get("dimensions") == "30x20x12 cm"
-                    
-                    if weight_ok and dimensions_ok:
-                        self.log_result(
-                            "Create Product - All Fields", 
-                            True, 
-                            f"Product created with ID: {self.created_product_id}. Weight: {created_product.get('weight')}, Dimensions: {created_product.get('dimensions')}"
-                        )
-                        return True
-                    else:
-                        self.log_result(
-                            "Create Product - All Fields", 
-                            False, 
-                            f"Weight/Dimensions not saved correctly. Weight: {created_product.get('weight')}, Dimensions: {created_product.get('dimensions')}"
-                        )
-                        return False
-                else:
-                    self.log_result(
-                        "Create Product - All Fields", 
-                        False, 
-                        f"Field issues: {', '.join(missing_fields[:5])}"  # Show first 5 issues
-                    )
-                    return False
-            else:
-                self.log_result(
-                    "Create Product - All Fields", 
-                    False, 
-                    f"Status code: {response.status_code}, Response: {response.text}"
-                )
-                return False
-                
-        except Exception as e:
-            self.log_result("Create Product - All Fields", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_get_all_products(self):
-        """Test getting all products"""
-        try:
-            response = requests.get(f"{self.base_url}/products", timeout=10)
+            # Verify all shipping fields are present
+            shipping_fields = [
+                "weight", "dimensions", "shipping_category", 
+                "delivery_cost_webshop", "delivery_cost_size", "delivery_cost_weight"
+            ]
             
-            if response.status_code == 200:
-                products = response.json()
-                if isinstance(products, list):
-                    # Verify our created product is in the list
-                    found_product = False
-                    if self.created_product_id:
-                        for product in products:
-                            if product.get("id") == self.created_product_id:
-                                found_product = True
-                                # Verify weight and dimensions are preserved
-                                weight_ok = product.get("weight") == "350g"
-                                dimensions_ok = product.get("dimensions") == "30x20x12 cm"
-                                
-                                if weight_ok and dimensions_ok:
-                                    self.log_result(
-                                        "Get All Products", 
-                                        True, 
-                                        f"Found {len(products)} products. Created product found with correct weight/dimensions."
-                                    )
-                                    return True
-                                else:
-                                    self.log_result(
-                                        "Get All Products", 
-                                        False, 
-                                        f"Created product found but weight/dimensions incorrect: weight={product.get('weight')}, dimensions={product.get('dimensions')}"
-                                    )
-                                    return False
-                        
-                        if not found_product:
-                            self.log_result(
-                                "Get All Products", 
-                                False, 
-                                f"Created product ID {self.created_product_id} not found in {len(products)} products"
-                            )
-                            return False
-                    else:
-                        self.log_result(
-                            "Get All Products", 
-                            True, 
-                            f"Retrieved {len(products)} products (no created product to verify)"
-                        )
-                        return True
+            all_fields_present = True
+            for field in shipping_fields:
+                if field in created_product and created_product[field] == test_product[field]:
+                    print(f"✅ {field}: {created_product[field]}")
                 else:
-                    self.log_result("Get All Products", False, f"Response is not a list: {type(products)}")
-                    return False
+                    print(f"❌ {field}: Expected '{test_product[field]}', got '{created_product.get(field, 'MISSING')}'")
+                    all_fields_present = False
+            
+            if all_fields_present:
+                print("✅ All shipping fields saved correctly")
+                return created_product.get('id'), True
             else:
-                self.log_result("Get All Products", False, f"Status code: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Get All Products", False, f"Exception: {str(e)}")
-            return False
+                print("❌ Some shipping fields missing or incorrect")
+                return created_product.get('id'), False
+        else:
+            print(f"❌ Product creation failed - status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            return None, False
+            
+    except Exception as e:
+        print(f"❌ Product creation failed with error: {e}")
+        return None, False
+
+def test_get_products(product_id):
+    """Test getting all products and verify the created product has shipping fields"""
+    print("\n🔍 Testing Get Products Endpoint...")
     
-    def test_get_single_product(self):
-        """Test getting a single product by ID"""
-        if not self.created_product_id:
-            self.log_result("Get Single Product", False, "No created product ID available")
-            return False
+    try:
+        response = requests.get(f"{BACKEND_URL}/products", timeout=10)
+        print(f"Status Code: {response.status_code}")
         
-        try:
-            response = requests.get(f"{self.base_url}/products/{self.created_product_id}", timeout=10)
+        if response.status_code == 200:
+            products = response.json()
+            print(f"✅ Retrieved {len(products)} products")
             
-            if response.status_code == 200:
-                product = response.json()
+            # Find our test product
+            test_product = None
+            for product in products:
+                if product.get('id') == product_id:
+                    test_product = product
+                    break
+            
+            if test_product:
+                print(f"✅ Found test product with ID: {product_id}")
                 
-                # Verify key fields including weight and dimensions
-                expected_fields = {
-                    "name": "Nike Air Max 270",
-                    "weight": "350g",
-                    "dimensions": "30x20x12 cm",
-                    "price": "$149.99",
-                    "brand": "Nike"
+                # Verify shipping fields are present in the retrieved product
+                expected_shipping_data = {
+                    "name": "Test Product",
+                    "price": "€29.99",
+                    "weight": "500g",
+                    "dimensions": "30x20x15 cm",
+                    "shipping_category": "M",
+                    "delivery_cost_webshop": "€5.95",
+                    "delivery_cost_size": "€5.00",
+                    "delivery_cost_weight": "€3.75"
                 }
                 
-                missing_or_incorrect = []
-                for field, expected_value in expected_fields.items():
-                    if field not in product:
-                        missing_or_incorrect.append(f"{field}: missing")
-                    elif product[field] != expected_value:
-                        missing_or_incorrect.append(f"{field}: expected '{expected_value}', got '{product[field]}'")
-                
-                if not missing_or_incorrect:
-                    self.log_result(
-                        "Get Single Product", 
-                        True, 
-                        f"Product retrieved successfully with ID: {product.get('id')}"
-                    )
-                    return True
-                else:
-                    self.log_result(
-                        "Get Single Product", 
-                        False, 
-                        f"Field issues: {', '.join(missing_or_incorrect)}"
-                    )
-                    return False
-            elif response.status_code == 404:
-                self.log_result("Get Single Product", False, "Product not found (404)")
-                return False
-            else:
-                self.log_result("Get Single Product", False, f"Status code: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Get Single Product", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_update_product_weight_dimensions(self):
-        """Test updating product weight and dimensions specifically"""
-        if not self.created_product_id:
-            self.log_result("Update Product Weight/Dimensions", False, "No created product ID available")
-            return False
-        
-        update_data = {
-            "weight": "400g",
-            "dimensions": "35x25x15 cm",
-            "price": "$139.99"  # Also update price to verify multiple fields
-        }
-        
-        try:
-            response = requests.put(
-                f"{self.base_url}/products/{self.created_product_id}",
-                json=update_data,
-                headers={"Content-Type": "application/json"},
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                updated_product = response.json()
-                
-                # Verify updates
-                weight_updated = updated_product.get("weight") == "400g"
-                dimensions_updated = updated_product.get("dimensions") == "35x25x15 cm"
-                price_updated = updated_product.get("price") == "$139.99"
-                
-                # Verify other fields weren't changed
-                name_preserved = updated_product.get("name") == "Nike Air Max 270"
-                brand_preserved = updated_product.get("brand") == "Nike"
-                
-                if weight_updated and dimensions_updated and price_updated and name_preserved and brand_preserved:
-                    self.log_result(
-                        "Update Product Weight/Dimensions", 
-                        True, 
-                        f"Updated: weight={updated_product.get('weight')}, dimensions={updated_product.get('dimensions')}, price={updated_product.get('price')}"
-                    )
-                    return True
-                else:
-                    issues = []
-                    if not weight_updated:
-                        issues.append(f"weight not updated: {updated_product.get('weight')}")
-                    if not dimensions_updated:
-                        issues.append(f"dimensions not updated: {updated_product.get('dimensions')}")
-                    if not price_updated:
-                        issues.append(f"price not updated: {updated_product.get('price')}")
-                    if not name_preserved:
-                        issues.append(f"name changed: {updated_product.get('name')}")
-                    if not brand_preserved:
-                        issues.append(f"brand changed: {updated_product.get('brand')}")
-                    
-                    self.log_result(
-                        "Update Product Weight/Dimensions", 
-                        False, 
-                        f"Update issues: {', '.join(issues)}"
-                    )
-                    return False
-            else:
-                self.log_result("Update Product Weight/Dimensions", False, f"Status code: {response.status_code}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Update Product Weight/Dimensions", False, f"Exception: {str(e)}")
-            return False
-    
-    def test_ai_analysis_with_weight_dimensions(self):
-        """Test AI screenshot analysis to verify weight and dimensions are returned"""
-        # Create a more realistic test screenshot (simulate a product page)
-        test_image = self.generate_test_image()
-        
-        test_data = {
-            "screenshot_base64": f"data:image/jpeg;base64,{test_image}",
-            "url": "https://example.com/test-product",
-            "page_content": """
-            Apple iPhone 15 Pro - 128GB - Natural Titanium
-            Price: $999.00
-            Was: $1099.00
-            Brand: Apple
-            Color: Natural Titanium (currently selected)
-            Storage: 128GB (currently selected)
-            Material: Titanium
-            Category: Electronics
-            In Stock - Ships in 1-2 days
-            Rating: 4.8/5 (2,547 reviews)
-            
-            Technical Specifications:
-            Weight: 187g
-            Dimensions: 146.6 x 70.6 x 8.25 mm
-            Display: 6.1-inch Super Retina XDR
-            """
-        }
-        
-        try:
-            response = requests.post(
-                f"{self.base_url}/products/analyze-screenshot",
-                json=test_data,
-                headers={"Content-Type": "application/json"},
-                timeout=30  # AI analysis can take longer
-            )
-            
-            if response.status_code == 200:
-                analysis_result = response.json()
-                
-                # Verify the response structure and that weight/dimensions are included
-                required_fields = ["name", "price", "brand", "weight", "dimensions", "confidence"]
-                missing_fields = [field for field in required_fields if field not in analysis_result]
-                
-                if not missing_fields:
-                    weight = analysis_result.get("weight", "")
-                    dimensions = analysis_result.get("dimensions", "")
-                    confidence = analysis_result.get("confidence", 0)
-                    
-                    # Check if weight and dimensions are extracted (they should be strings, can be empty if not found)
-                    weight_field_exists = isinstance(weight, str)
-                    dimensions_field_exists = isinstance(dimensions, str)
-                    confidence_valid = isinstance(confidence, (int, float)) and 0 <= confidence <= 1
-                    
-                    if weight_field_exists and dimensions_field_exists and confidence_valid:
-                        self.log_result(
-                            "AI Analysis - Weight/Dimensions Fields", 
-                            True, 
-                            f"Analysis completed. Weight field: '{weight}', Dimensions field: '{dimensions}', Confidence: {confidence}"
-                        )
-                        return True
+                all_fields_correct = True
+                for field, expected_value in expected_shipping_data.items():
+                    actual_value = test_product.get(field)
+                    if actual_value == expected_value:
+                        print(f"✅ {field}: {actual_value}")
                     else:
-                        issues = []
-                        if not weight_field_exists:
-                            issues.append(f"weight field invalid: {type(weight)}")
-                        if not dimensions_field_exists:
-                            issues.append(f"dimensions field invalid: {type(dimensions)}")
-                        if not confidence_valid:
-                            issues.append(f"confidence invalid: {confidence}")
-                        
-                        self.log_result(
-                            "AI Analysis - Weight/Dimensions Fields", 
-                            False, 
-                            f"Field type/value issues: {', '.join(issues)}"
-                        )
-                        return False
+                        print(f"❌ {field}: Expected '{expected_value}', got '{actual_value}'")
+                        all_fields_correct = False
+                
+                if all_fields_correct:
+                    print("✅ All shipping fields verified in retrieved product")
+                    return True
                 else:
-                    self.log_result(
-                        "AI Analysis - Weight/Dimensions Fields", 
-                        False, 
-                        f"Missing required fields: {', '.join(missing_fields)}"
-                    )
+                    print("❌ Some shipping fields incorrect in retrieved product")
                     return False
             else:
-                self.log_result(
-                    "AI Analysis - Weight/Dimensions Fields", 
-                    False, 
-                    f"Status code: {response.status_code}, Response: {response.text[:200]}"
-                )
+                print(f"❌ Test product with ID {product_id} not found in products list")
                 return False
-                
-        except Exception as e:
-            self.log_result("AI Analysis - Weight/Dimensions Fields", False, f"Exception: {str(e)}")
-            return False
-    
-    def run_all_tests(self):
-        """Run all tests in sequence"""
-        print("🧪 Starting Product Capture API Tests")
-        print("=" * 60)
-        
-        tests = [
-            self.test_health_check,
-            self.test_create_product_with_all_fields,
-            self.test_get_all_products,
-            self.test_get_single_product,
-            self.test_update_product_weight_dimensions,
-            self.test_ai_analysis_with_weight_dimensions
-        ]
-        
-        passed_count = 0
-        total_count = len(tests)
-        
-        for test_func in tests:
-            if test_func():
-                passed_count += 1
-            time.sleep(1)  # Brief pause between tests
-        
-        print("=" * 60)
-        print(f"📊 TEST SUMMARY: {passed_count}/{total_count} tests passed")
-        
-        if passed_count == total_count:
-            print("🎉 ALL TESTS PASSED!")
         else:
-            print("⚠️  Some tests failed. See details above.")
+            print(f"❌ Get products failed - status code: {response.status_code}")
+            return False
             
-        return passed_count == total_count
+    except Exception as e:
+        print(f"❌ Get products failed with error: {e}")
+        return False
 
+def test_delete_product(product_id):
+    """Test deleting the test product"""
+    print(f"\n🔍 Testing Delete Product (ID: {product_id})...")
+    
+    try:
+        response = requests.delete(f"{BACKEND_URL}/products/{product_id}", timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Product deleted successfully: {result.get('message')}")
+            return True
+        else:
+            print(f"❌ Product deletion failed - status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Product deletion failed with error: {e}")
+        return False
+
+def main():
+    """Run all backend tests"""
+    print("🚀 Starting Backend Tests for Product Capture App")
+    print(f"Backend URL: {BACKEND_URL}")
+    print("=" * 60)
+    
+    test_results = []
+    product_id = None
+    
+    # Test 1: Health Check
+    health_result = test_health_check()
+    test_results.append(("Health Check", health_result))
+    
+    # Test 2: Create Product with Shipping Fields
+    product_id, create_result = test_create_product_with_shipping()
+    test_results.append(("Create Product with Shipping", create_result))
+    
+    # Test 3: Get Products and Verify Shipping Fields (only if product was created)
+    if product_id:
+        get_result = test_get_products(product_id)
+        test_results.append(("Get Products & Verify Shipping", get_result))
+        
+        # Test 4: Delete Test Product
+        delete_result = test_delete_product(product_id)
+        test_results.append(("Delete Test Product", delete_result))
+    else:
+        print("\n⚠️  Skipping Get Products and Delete tests due to failed product creation")
+        test_results.append(("Get Products & Verify Shipping", False))
+        test_results.append(("Delete Test Product", False))
+    
+    # Summary
+    print("\n" + "=" * 60)
+    print("📊 TEST SUMMARY")
+    print("=" * 60)
+    
+    passed = 0
+    total = len(test_results)
+    
+    for test_name, result in test_results:
+        status = "✅ PASS" if result else "❌ FAIL"
+        print(f"{test_name}: {status}")
+        if result:
+            passed += 1
+    
+    print(f"\nOverall: {passed}/{total} tests passed ({(passed/total)*100:.1f}%)")
+    
+    if passed == total:
+        print("🎉 All tests passed! Backend is working correctly.")
+        return 0
+    else:
+        print("⚠️  Some tests failed. Check the details above.")
+        return 1
 
 if __name__ == "__main__":
-    tester = ProductCaptureAPITest()
-    success = tester.run_all_tests()
-    
-    # Print detailed results
-    print("\n📋 DETAILED TEST RESULTS:")
-    print("-" * 40)
-    for result in tester.test_results:
-        status = "✅" if result["passed"] else "❌"
-        print(f"{status} {result['test']}")
-        if result["details"]:
-            print(f"   {result['details']}")
-    
-    if success:
-        exit(0)
-    else:
-        exit(1)
+    sys.exit(main())

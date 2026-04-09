@@ -22,8 +22,61 @@ import { router } from 'expo-router';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
+// ===== Shipping calculation utilities (same as capture.tsx) =====
+type ShippingCategory = 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL';
+
+const SHIPPING_PRICES: Record<ShippingCategory, number> = {
+  'S': 5, 'M': 5, 'L': 15, 'XL': 24, 'XXL': 44, 'XXXL': 72,
+};
+const WEIGHT_PRICE_PER_100G = 0.75;
+
+function parseDimensions(dimStr: string): { l: number; w: number; h: number; total: number } | null {
+  if (!dimStr) return null;
+  const numbers = dimStr.match(/[\d]+[.,]?[\d]*/g);
+  if (!numbers || numbers.length < 3) return null;
+  let vals = numbers.slice(0, 3).map(n => parseFloat(n.replace(',', '.')));
+  vals.sort((a, b) => b - a);
+  const lower = dimStr.toLowerCase();
+  if (lower.includes('mm') && !lower.includes('cm')) vals = vals.map(v => v / 10);
+  if (lower.includes(' m') && !lower.includes('mm') && !lower.includes('cm') && vals[0] < 5) vals = vals.map(v => v * 100);
+  if (lower.includes('inch') || lower.includes('"') || lower.includes('in')) vals = vals.map(v => v * 2.54);
+  if (vals[0] > 200 && vals[1] > 100 && vals[2] > 100) vals = vals.map(v => v / 10);
+  return { l: vals[0], w: vals[1], h: vals[2], total: vals[0] + vals[1] + vals[2] };
+}
+
+function parseWeightGrams(weightStr: string): number {
+  if (!weightStr) return 0;
+  const numMatch = weightStr.match(/([\d]+[.,]?[\d]*)/);
+  if (!numMatch) return 0;
+  const value = parseFloat(numMatch[1].replace(',', '.'));
+  const lower = weightStr.toLowerCase();
+  if (lower.includes('kg') || lower.includes('kilo')) return value * 1000;
+  if (lower.includes('lbs') || lower.includes('pound')) return value * 453.59;
+  if (lower.includes('g') || lower.includes('gram')) return value;
+  return value > 50 ? value : value * 1000;
+}
+
+function getShippingCategory(dimStr: string): ShippingCategory {
+  const dims = parseDimensions(dimStr);
+  if (!dims) return 'M';
+  const total = dims.total;
+  if (total <= 60) return 'S';
+  if (total <= 90) return 'M';
+  if (total <= 120) return 'L';
+  if (total <= 175) return 'XL';
+  if (total <= 240) return 'XXL';
+  return 'XXXL';
+}
+
+function calculateDeliveryPrices(dimStr: string, weightStr: string) {
+  const category = getShippingCategory(dimStr);
+  const sizePrice = SHIPPING_PRICES[category];
+  const weightGrams = parseWeightGrams(weightStr);
+  const weightPrice = Math.round((weightGrams / 100) * WEIGHT_PRICE_PER_100G * 100) / 100;
+  return { category, sizePrice, weightPrice, weightGrams };
+}
+
 export default function AddProductScreen() {
-  const [url, setUrl] = useState('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,6 +99,7 @@ export default function AddProductScreen() {
   const [productImageUrl, setProductImageUrl] = useState('');
   const [weight, setWeight] = useState('');
   const [dimensions, setDimensions] = useState('');
+  const [deliveryCost, setDeliveryCost] = useState('');
 
   const pickImageAndAnalyze = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -81,6 +135,15 @@ export default function AddProductScreen() {
 
         const info = response.data;
         
+        // Check delivery availability
+        if (info.delivery_available === false) {
+          Alert.alert(
+            'Not Available for Delivery',
+            `"${info.name || 'This product'}" is not available for delivery from this webshop.`,
+            [{ text: 'OK', onPress: () => {} }]
+          );
+        }
+        
         // Populate form with extracted data
         setName(info.name || '');
         setPrice(info.price || '');
@@ -95,6 +158,7 @@ export default function AddProductScreen() {
         setRating(info.rating || '');
         setWeight(info.weight || '');
         setDimensions(info.dimensions || '');
+        setDeliveryCost(info.delivery_cost || '');
         
         setShowForm(true);
 
@@ -118,19 +182,36 @@ export default function AddProductScreen() {
 
   const pasteFromClipboard = async () => {
     try {
-      const clipboardContent = await Clipboard.getStringAsync();
-      if (clipboardContent) {
-        if (clipboardContent.startsWith('http')) {
-          const trimmedUrl = clipboardContent.trim();
-          router.push(`/capture?url=${encodeURIComponent(trimmedUrl)}`);
-        } else {
-          Alert.alert('Invalid URL', 'Clipboard does not contain a valid URL (must start with http:// or https://)');
-        }
-      } else {
-        Alert.alert('Clipboard Empty', 'No content found in clipboard');
+      const hasString = await Clipboard.hasStringAsync();
+      if (!hasString) {
+        Alert.alert('Clipboard Empty', 'No text found in clipboard. Copy a product URL first.');
+        return;
       }
-    } catch (error) {
-      Alert.alert('Error', 'Could not read from clipboard');
+      
+      const rawContent = await Clipboard.getStringAsync();
+      const trimmedUrl = (rawContent || '').trim();
+      
+      if (!trimmedUrl) {
+        Alert.alert('Clipboard Empty', 'No content found in clipboard.');
+        return;
+      }
+      
+      if (!trimmedUrl.toLowerCase().startsWith('http')) {
+        Alert.alert(
+          'Invalid URL', 
+          'Clipboard does not contain a valid URL. Make sure you copied a product page link (starting with http:// or https://).'
+        );
+        return;
+      }
+      
+      // Navigate to capture screen with the URL
+      router.push({
+        pathname: '/capture',
+        params: { url: trimmedUrl },
+      });
+    } catch (error: any) {
+      console.error('Clipboard error:', error);
+      Alert.alert('Clipboard Error', 'Could not read from clipboard. Please try again.');
     }
   };
 
@@ -147,6 +228,8 @@ export default function AddProductScreen() {
     setSaving(true);
 
     try {
+      const delivery = calculateDeliveryPrices(dimensions, weight);
+      
       await axios.post(`${BACKEND_URL}/api/products`, {
         name: name.trim(),
         price: price.trim(),
@@ -162,6 +245,10 @@ export default function AddProductScreen() {
         rating: rating.trim(),
         weight: weight.trim(),
         dimensions: dimensions.trim(),
+        shipping_category: delivery.category,
+        delivery_cost_webshop: deliveryCost.trim(),
+        delivery_cost_size: `€${delivery.sizePrice.toFixed(2)}`,
+        delivery_cost_weight: `€${delivery.weightPrice.toFixed(2)}`,
         original_url: '',
         image_base64: productImageUrl || '',
         screenshot_base64: screenshot || '',
@@ -200,6 +287,7 @@ export default function AddProductScreen() {
     setProductImageUrl('');
     setWeight('');
     setDimensions('');
+    setDeliveryCost('');
   };
 
   const FormField = ({ label, value, onChangeText, placeholder, multiline = false }: any) => (
@@ -371,6 +459,54 @@ export default function AddProductScreen() {
 
               <FormField label="Description" value={description} onChangeText={setDescription} placeholder="Product description" multiline />
 
+              {/* Delivery Price Card */}
+              {(weight || dimensions) ? (
+                (() => {
+                  const delivery = calculateDeliveryPrices(dimensions, weight);
+                  return (
+                    <View style={styles.deliveryCard}>
+                      <View style={styles.deliveryHeader}>
+                        <Ionicons name="car-outline" size={22} color="#f59e0b" />
+                        <Text style={styles.deliveryTitle}>Delivery Prices</Text>
+                      </View>
+                      
+                      <View style={styles.deliveryCategoryRow}>
+                        <Text style={styles.deliveryCategoryLabel}>Verpakkingscategorie</Text>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryBadgeText}>{delivery.category}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.deliveryBreakdown}>
+                        <View style={styles.deliveryLine}>
+                          <View style={styles.deliveryLineLabelRow}>
+                            <Ionicons name="bicycle-outline" size={16} color="#9ca3af" />
+                            <Text style={styles.deliveryLineLabel}>Verzendkosten webshop (NL)</Text>
+                          </View>
+                          <Text style={styles.deliveryLineValue}>{deliveryCost || 'Onbekend'}</Text>
+                        </View>
+                        
+                        <View style={[styles.deliveryLine, styles.deliveryLineBorder]}>
+                          <View style={styles.deliveryLineLabelRow}>
+                            <Ionicons name="cube-outline" size={16} color="#9ca3af" />
+                            <Text style={styles.deliveryLineLabel}>Verpakkingsafmetingen ({delivery.category})</Text>
+                          </View>
+                          <Text style={styles.deliveryLineValue}>€{delivery.sizePrice.toFixed(2)}</Text>
+                        </View>
+                        
+                        <View style={[styles.deliveryLine, styles.deliveryLineBorder]}>
+                          <View style={styles.deliveryLineLabelRow}>
+                            <Ionicons name="scale-outline" size={16} color="#9ca3af" />
+                            <Text style={styles.deliveryLineLabel}>Verpakkingsgewicht ({delivery.weightGrams > 0 ? `${delivery.weightGrams}g` : '?'})</Text>
+                          </View>
+                          <Text style={styles.deliveryLineValue}>€{delivery.weightPrice.toFixed(2)}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })()
+              ) : null}
+
               {/* Save Button */}
               <TouchableOpacity
                 style={[styles.saveButton, saving && styles.disabledButton]}
@@ -464,6 +600,27 @@ export default function AddProductScreen() {
                     <Text style={styles.summaryValue}>{dimensions}</Text>
                   </View>
                 ) : null}
+                
+                {/* Delivery Prices in confirmation */}
+                {(() => {
+                  const delivery = calculateDeliveryPrices(dimensions, weight);
+                  return (
+                    <>
+                      <View style={[styles.summaryRow, { paddingTop: 14 }]}>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verzendkosten webshop (NL)</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>{deliveryCost || 'Onbekend'}</Text>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verpakkingsafmetingen ({delivery.category})</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>€{delivery.sizePrice.toFixed(2)}</Text>
+                      </View>
+                      <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
+                        <Text style={[styles.summaryLabel, { color: '#f59e0b' }]}>Verpakkingsgewicht</Text>
+                        <Text style={[styles.summaryValue, { color: '#f59e0b', fontWeight: '700' }]}>€{delivery.weightPrice.toFixed(2)}</Text>
+                      </View>
+                    </>
+                  );
+                })()}
               </ScrollView>
               
               <View style={styles.modalButtons}>
@@ -872,5 +1029,81 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Delivery card styles
+  deliveryCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f59e0b30',
+  },
+  deliveryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  deliveryTitle: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  deliveryCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  deliveryCategoryLabel: {
+    color: '#9ca3af',
+    fontSize: 14,
+  },
+  categoryBadge: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  categoryBadgeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  deliveryBreakdown: {
+    backgroundColor: '#0f0f0f',
+    borderRadius: 10,
+    padding: 12,
+  },
+  deliveryLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  deliveryLineLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  deliveryLineLabel: {
+    color: '#9ca3af',
+    fontSize: 13,
+    flex: 1,
+  },
+  deliveryLineValue: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  deliveryLineBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a2a',
+    marginTop: 2,
+    paddingTop: 8,
   },
 });
