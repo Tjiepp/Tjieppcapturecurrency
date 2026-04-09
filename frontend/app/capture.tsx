@@ -1112,7 +1112,7 @@ export default function CaptureScreen() {
           </>
         ) : (
           <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
-            /* ===== PRODUCT FORM (after all steps complete) ===== */
+            {/* ===== PRODUCT FORM (after all steps complete) ===== */}
             <View style={styles.formSection}>
               <View style={styles.formHeader}>
                 <Text style={styles.formTitle}>Product Details</Text>

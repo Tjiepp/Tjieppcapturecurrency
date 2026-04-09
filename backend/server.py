@@ -198,8 +198,8 @@ Product URL: {url if url else 'Not provided'}
 Extract as much detail as possible. Return ONLY a valid JSON object with these fields:
 {{
     "name": "Full product name/title",
-    "price": "Current/sale price with currency (e.g., $29.99, €19,99)",
-    "original_price": "Original price before discount, if shown (empty if no discount)",
+    "price": "CURRENT selling price - the price the customer pays NOW. This is the LOWEST/BOLDEST price shown. On bol.com this is the large price next to 'Nu voor'. Include currency symbol (e.g., €29,99)",
+    "original_price": "ONLY the OLD/CROSSED-OUT/STRIKETHROUGH price before discount. On bol.com this is the small price with a line through it. Leave EMPTY if there is no discount/strikethrough price",
     "currency": "Currency code (USD, EUR, GBP, etc.)",
     "description": "Product description - key features and details (max 300 chars)",
     "brand": "Brand/manufacturer name",
@@ -241,7 +241,7 @@ WEIGHT AND DIMENSIONS:
 OTHER RULES:
 - Extract from BOTH the page content AND screenshot
 - Use empty string "" for any field you cannot find
-- For price, prefer sale/current price over original
+- PRICE RULES: "price" MUST be the LOWEST price shown = what the customer pays NOW. "original_price" is ONLY the higher crossed-out/strikethrough price. If there is only one price and no discount, put it in "price" and leave "original_price" empty. On bol.com: the big bold price = "price", the small strikethrough price = "original_price".
 - PRICE IS CRITICAL: Look EVERYWHERE for the price - in headers, sidebars, "add to cart" sections, product tiles, price tags. Also look in the HTML for price-related classes, meta tags, or structured data. If you see ANY number with a currency symbol or in a price-like format near the product, extract it.
 - Be specific with category (not just "Product")
 - DELIVERY: Set delivery_available to false if the page shows: "not available for delivery", "only in-store pickup", "niet leverbaar", "geen bezorging", "alleen afhalen", "not shippable", "pickup only", "out of stock", "sold out", "uitverkocht", or any similar indication that the product cannot be shipped/delivered. Default to true if there's no clear indication either way.
