@@ -57,6 +57,10 @@ class Product(BaseModel):
     rating: str = ""
     weight: str = ""  # Product/package weight
     dimensions: str = ""  # Product/package dimensions
+    shipping_category: str = ""  # S, M, L, XL, XXL, XXXL
+    delivery_cost_webshop: str = ""  # Extracted delivery cost from webshop
+    delivery_cost_size: str = ""  # Delivery cost by package size
+    delivery_cost_weight: str = ""  # Delivery cost by package weight
     original_url: str = ""
     image_base64: str = ""  # Product image
     screenshot_base64: str = ""  # Original screenshot
@@ -79,6 +83,10 @@ class ProductCreate(BaseModel):
     rating: str = ""
     weight: str = ""
     dimensions: str = ""
+    shipping_category: str = ""
+    delivery_cost_webshop: str = ""
+    delivery_cost_size: str = ""
+    delivery_cost_weight: str = ""
     original_url: str = ""
     image_base64: str = ""
     screenshot_base64: str = ""
@@ -99,6 +107,10 @@ class ProductUpdate(BaseModel):
     rating: Optional[str] = None
     weight: Optional[str] = None
     dimensions: Optional[str] = None
+    shipping_category: Optional[str] = None
+    delivery_cost_webshop: Optional[str] = None
+    delivery_cost_size: Optional[str] = None
+    delivery_cost_weight: Optional[str] = None
     original_url: Optional[str] = None
     image_base64: Optional[str] = None
 
@@ -357,6 +369,10 @@ async def create_product(product: ProductCreate):
         rating=product.rating,
         weight=product.weight,
         dimensions=product.dimensions,
+        shipping_category=product.shipping_category,
+        delivery_cost_webshop=product.delivery_cost_webshop,
+        delivery_cost_size=product.delivery_cost_size,
+        delivery_cost_weight=product.delivery_cost_weight,
         original_url=product.original_url,
         image_base64=product.image_base64,
         screenshot_base64=product.screenshot_base64

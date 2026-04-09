@@ -32,6 +32,10 @@ interface Product {
   quantity: number;
   weight: string;
   dimensions: string;
+  shipping_category: string;
+  delivery_cost_webshop: string;
+  delivery_cost_size: string;
+  delivery_cost_weight: string;
   category: string;
   availability: string;
   original_url: string;
@@ -159,6 +163,12 @@ export default function ProductsScreen() {
                 <View style={styles.attributeTag}>
                   <Ionicons name="resize-outline" size={12} color="#9ca3af" />
                   <Text style={styles.attributeText}>{item.size}</Text>
+                </View>
+              ) : null}
+              {item.shipping_category ? (
+                <View style={[styles.attributeTag, styles.shippingTag]}>
+                  <Ionicons name="car-outline" size={12} color="#f59e0b" />
+                  <Text style={[styles.attributeText, styles.shippingText]}>{item.shipping_category}</Text>
                 </View>
               ) : null}
             </View>
@@ -366,6 +376,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9ca3af',
     maxWidth: 70,
+  },
+  shippingTag: {
+    borderColor: '#f59e0b30',
+  },
+  shippingText: {
+    color: '#f59e0b',
+    fontWeight: '700',
+    maxWidth: 50,
   },
   emptyContainer: {
     flex: 1,

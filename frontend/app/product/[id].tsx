@@ -36,6 +36,10 @@ interface Product {
   rating: string;
   weight: string;
   dimensions: string;
+  shipping_category: string;
+  delivery_cost_webshop: string;
+  delivery_cost_size: string;
+  delivery_cost_weight: string;
   original_url: string;
   image_base64: string;
   screenshot_base64: string;
@@ -333,6 +337,25 @@ export default function ProductDetailScreen() {
                 <DetailRow icon="star-outline" label="Rating" value={product.rating} />
                 <DetailRow icon="scale-outline" label="Weight" value={product.weight} />
                 <DetailRow icon="cube-outline" label="Dimensions" value={product.dimensions} />
+                
+                {/* Delivery info */}
+                {(product.shipping_category || product.delivery_cost_webshop || product.delivery_cost_size || product.delivery_cost_weight) ? (
+                  <View style={styles.deliverySection}>
+                    <Text style={styles.deliverySectionTitle}>Delivery Prices</Text>
+                    {product.shipping_category ? (
+                      <DetailRow icon="car-outline" label="Verpakkingscategorie" value={product.shipping_category} />
+                    ) : null}
+                    {product.delivery_cost_webshop ? (
+                      <DetailRow icon="bicycle-outline" label="Verzendkosten webshop (NL)" value={product.delivery_cost_webshop} />
+                    ) : null}
+                    {product.delivery_cost_size ? (
+                      <DetailRow icon="cube-outline" label="Verpakkingsafmetingen" value={product.delivery_cost_size} />
+                    ) : null}
+                    {product.delivery_cost_weight ? (
+                      <DetailRow icon="scale-outline" label="Verpakkingsgewicht" value={product.delivery_cost_weight} />
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
 
               {/* Description */}
@@ -474,6 +497,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     flex: 1,
+  },
+  deliverySection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#2a2a2a',
+  },
+  deliverySectionTitle: {
+    color: '#f59e0b',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 8,
   },
   descriptionCard: {
     backgroundColor: '#1a1a1a',
