@@ -150,7 +150,7 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
             api_key=EMERGENT_LLM_KEY,
             session_id=f"product-analysis-{uuid.uuid4()}",
             system_message="""You are a product info extraction expert. Extract product details from screenshots and page content. Always respond with valid JSON only."""
-        ).with_model("openai", "gpt-5.2")
+        ).with_model("openai", "gpt-4o-mini")
         
         # Create image content
         image_content = ImageContent(image_base64=screenshot_base64)
