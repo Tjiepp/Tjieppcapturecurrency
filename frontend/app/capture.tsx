@@ -273,10 +273,44 @@ export default function CaptureScreen() {
           let structuredOriginalPrice = '';
           if (structuredData.offers) {
             const offers = Array.isArray(structuredData.offers) ? structuredData.offers[0] : structuredData.offers;
-            structuredPrice = offers?.price || offers?.lowPrice || '';
+            // Use offers.price only - NOT lowPrice (lowPrice can be from marketplace sellers)
+            structuredPrice = offers?.price || '';
             structuredOriginalPrice = offers?.highPrice || '';
             if (offers?.priceCurrency && structuredPrice) {
               structuredPrice = offers.priceCurrency + ' ' + structuredPrice;
+            }
+          }
+          
+          // bol.com specific: find the MAIN buy-block price (not marketplace prices)
+          let bolMainPrice = '';
+          let bolOriginalPrice = '';
+          const hostname = window.location.hostname || '';
+          if (hostname.includes('bol.com') || hostname.includes('bol.nl')) {
+            // Try buy block area first
+            const buyBlock = document.querySelector('[data-test="buy-block"], .buy-block, .product-prices, [class*="buy-block"]');
+            if (buyBlock) {
+              // Current price in buy block
+              const priceEl = buyBlock.querySelector('[data-test="price"], .promo-price, [class*="promo-price"], [class*="sale-price"], .price--current');
+              if (priceEl) bolMainPrice = priceEl.textContent?.trim() || '';
+              // Original/was price in buy block
+              const origEl = buyBlock.querySelector('[data-test="from-price"], .price--from, [class*="from-price"], [class*="was-price"], s, del, [style*="line-through"]');
+              if (origEl) bolOriginalPrice = origEl.textContent?.trim() || '';
+            }
+            // Fallback: look for price near "In winkelwagen" button
+            if (!bolMainPrice) {
+              const allPriceEls = document.querySelectorAll('[class*="price"]:not([class*="shipping"]):not([class*="delivery"])');
+              allPriceEls.forEach(el => {
+                const text = (el.textContent || '').trim();
+                if (text.match(/€\s*\d+[,.]?\d{0,2}$/) && !bolMainPrice) {
+                  // Check if this is a strikethrough/was price
+                  const styles = window.getComputedStyle(el);
+                  if (styles.textDecorationLine === 'line-through' || el.tagName === 'S' || el.tagName === 'DEL') {
+                    if (!bolOriginalPrice) bolOriginalPrice = text;
+                  } else {
+                    bolMainPrice = text;
+                  }
+                }
+              });
             }
           }
           
@@ -345,7 +379,9 @@ export default function CaptureScreen() {
             title, metaTags, prices: allPrices.slice(0, 10), names: names.slice(0, 3),
             descriptions: descriptions.slice(0, 2), 
             selectedColor, selectedSize,
-            structuredPrice, structuredOriginalPrice, productImageUrl,
+            structuredPrice, structuredOriginalPrice, 
+            bolMainPrice, bolOriginalPrice,
+            productImageUrl,
             mainContent, structuredData, url: window.location.href
           });
         };

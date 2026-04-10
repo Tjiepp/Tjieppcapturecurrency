@@ -167,8 +167,17 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
                 structured_price = parsed_content.get("structuredPrice", "")
                 structured_original_price = parsed_content.get("structuredOriginalPrice", "")
                 
+                # bol.com-specific DOM-extracted prices (most reliable for bol.com)
+                bol_main_price = parsed_content.get("bolMainPrice", "")
+                bol_original_price = parsed_content.get("bolOriginalPrice", "")
+                
+                if bol_main_price:
+                    extracted_prices_hint += f"\nBOL.COM MAIN PRICE (from buy block DOM): {bol_main_price}"
+                if bol_original_price:
+                    extracted_prices_hint += f"\nBOL.COM ORIGINAL/WAS PRICE (strikethrough): {bol_original_price}"
+                    
                 if structured_price:
-                    extracted_prices_hint += f"\nSTRUCTURED DATA PRICE: {structured_price}"
+                    extracted_prices_hint += f"\nSTRUCTURED DATA PRICE (may be marketplace/lowest offer - USE WITH CAUTION): {structured_price}"
                 if structured_original_price:
                     extracted_prices_hint += f"\nSTRUCTURED DATA ORIGINAL PRICE: {structured_original_price}"
                 if js_prices:
@@ -198,8 +207,8 @@ Product URL: {url if url else 'Not provided'}
 Extract as much detail as possible. Return ONLY a valid JSON object with these fields:
 {{
     "name": "Full product name/title",
-    "price": "CURRENT selling price - the price the customer pays NOW. This is the LOWEST/BOLDEST price shown. On bol.com this is the large price next to 'Nu voor'. Include currency symbol (e.g., €29,99)",
-    "original_price": "ONLY the OLD/CROSSED-OUT/STRIKETHROUGH price before discount. On bol.com this is the small price with a line through it. Leave EMPTY if there is no discount/strikethrough price",
+    "price": "The MAIN DISPLAYED selling price on the product page - the price shown PROMINENTLY near the 'Add to Cart' / 'In winkelwagen' button. Include currency symbol (e.g., €69,99). WARNING: Do NOT use lowPrice or marketplace seller prices from JSON-LD structured data - those can be third-party seller prices that differ from the main displayed price.",
+    "original_price": "ONLY the OLD/CROSSED-OUT/STRIKETHROUGH price (the higher price before a discount). Leave EMPTY if there is no visible discount/strikethrough price on the page.",
     "currency": "Currency code (USD, EUR, GBP, etc.)",
     "description": "Product description - key features and details (max 300 chars)",
     "brand": "Brand/manufacturer name",
@@ -215,6 +224,15 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
     "delivery_cost": "Delivery/shipping cost within the Netherlands (e.g., €5.95, Gratis, Free). Look for: verzendkosten, bezorgkosten, shipping cost, delivery fee",
     "confidence": 0.0 to 1.0 based on extraction completeness
 }}
+
+CRITICAL PRICE RULES (READ CAREFULLY):
+- "price" = the MAIN DISPLAYED price on the product page, the one the customer sees prominently.
+- If "BOL.COM MAIN PRICE (from buy block DOM)" is provided above, ALWAYS USE THAT as the "price" - it is the most reliable source.
+- On bol.com: the MAIN price is the one displayed near "In winkelwagen" or "Nu voor". This is what the customer actually pays.
+- WARNING: JSON-LD structured data "offers.price" or "offers.lowPrice" on bol.com often shows the LOWEST marketplace seller price, which may be DIFFERENT from the main displayed price. DO NOT use these as "price" if a "BOL.COM MAIN PRICE" is provided.
+- "original_price" = ONLY the higher crossed-out/strikethrough price shown if there is a discount. If no discount/strikethrough is visible, leave EMPTY.
+- If there is only one price and no discount, put it in "price" and leave "original_price" empty.
+- PRICE IS CRITICAL: Look EVERYWHERE for the price - in headers, sidebars, "add to cart" sections, product tiles, price tags.
 
 CRITICAL RULES FOR SIZE AND COLOR:
 - For SIZE: Extract ONLY the currently selected/active size (the one the user has chosen)
@@ -241,8 +259,6 @@ WEIGHT AND DIMENSIONS:
 OTHER RULES:
 - Extract from BOTH the page content AND screenshot
 - Use empty string "" for any field you cannot find
-- PRICE RULES: "price" MUST be the LOWEST price shown = what the customer pays NOW. "original_price" is ONLY the higher crossed-out/strikethrough price. If there is only one price and no discount, put it in "price" and leave "original_price" empty. On bol.com: the big bold price = "price", the small strikethrough price = "original_price".
-- PRICE IS CRITICAL: Look EVERYWHERE for the price - in headers, sidebars, "add to cart" sections, product tiles, price tags. Also look in the HTML for price-related classes, meta tags, or structured data. If you see ANY number with a currency symbol or in a price-like format near the product, extract it.
 - Be specific with category (not just "Product")
 - DELIVERY: Set delivery_available to false if the page shows: "not available for delivery", "only in-store pickup", "niet leverbaar", "geen bezorging", "alleen afhalen", "not shippable", "pickup only", "out of stock", "sold out", "uitverkocht", or any similar indication that the product cannot be shipped/delivered. Default to true if there's no clear indication either way.
 - Return ONLY valid JSON, no markdown or explanation."""
