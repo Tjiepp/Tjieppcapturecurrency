@@ -12,6 +12,8 @@ from datetime import datetime
 import base64
 import json
 import re
+import httpx
+import time
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -420,6 +422,57 @@ async def delete_product(product_id: str):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted successfully"}
+
+# Exchange Rate Cache
+_exchange_rate_cache = {
+    "rates": {},
+    "last_fetched": 0,
+    "base": "EUR"
+}
+CACHE_TTL = 3600  # 1 hour
+
+@api_router.get("/exchange-rates")
+async def get_exchange_rates():
+    """Get exchange rates for EUR, USD, SRD with 1-hour caching."""
+    now = time.time()
+    
+    # Return cached rates if still fresh
+    if _exchange_rate_cache["rates"] and (now - _exchange_rate_cache["last_fetched"]) < CACHE_TTL:
+        return _exchange_rate_cache["rates"]
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client_http:
+            response = await client_http.get("https://open.er-api.com/v6/latest/EUR")
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("result") != "success":
+                raise HTTPException(status_code=502, detail="Exchange rate API returned an error")
+            
+            all_rates = data.get("rates", {})
+            
+            # Build a clean response with only the currencies we need
+            rates = {
+                "base": "EUR",
+                "rates": {
+                    "EUR": 1.0,
+                    "USD": all_rates.get("USD", 1.0),
+                    "SRD": all_rates.get("SRD", 1.0),
+                },
+                "last_updated": data.get("time_last_update_utc", "")
+            }
+            
+            # Update cache
+            _exchange_rate_cache["rates"] = rates
+            _exchange_rate_cache["last_fetched"] = now
+            
+            return rates
+    except httpx.HTTPError as e:
+        logger.error(f"Exchange rate API error: {e}")
+        # Return cached data if available, even if stale
+        if _exchange_rate_cache["rates"]:
+            return _exchange_rate_cache["rates"]
+        raise HTTPException(status_code=502, detail="Could not fetch exchange rates")
 
 # Include the router in the main app
 app.include_router(api_router)

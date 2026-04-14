@@ -15,10 +15,20 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
+
+type Currency = 'EUR' | 'USD' | 'SRD';
+const CURRENCY_SYMBOLS: Record<Currency, string> = { EUR: '€', USD: '$', SRD: 'SRD ' };
+
+interface ExchangeRates {
+  base: string;
+  rates: Record<string, number>;
+  last_updated: string;
+}
 
 interface Product {
   id: string;
@@ -44,10 +54,62 @@ interface Product {
   created_at: string;
 }
 
+// Parse a price string like "€69,99", "$75.50", "EUR 28.63" into { value, currency }
+function parsePrice(priceStr: string): { value: number; currency: Currency } | null {
+  if (!priceStr) return null;
+  const cleaned = priceStr.replace(/\s+/g, ' ').trim();
+  
+  let currency: Currency = 'EUR'; // default
+  if (cleaned.includes('$') || cleaned.toUpperCase().includes('USD')) currency = 'USD';
+  else if (cleaned.toUpperCase().includes('SRD')) currency = 'SRD';
+  else if (cleaned.includes('€') || cleaned.toUpperCase().includes('EUR')) currency = 'EUR';
+  
+  // Extract the number: handle both "69,99" (EU) and "69.99" (US) formats
+  const numMatch = cleaned.match(/([\d]+[.,]?[\d]*)/);
+  if (!numMatch) return null;
+  
+  let numStr = numMatch[1];
+  // If format is "1.234,56" (EU thousands), convert to standard
+  if (numStr.includes('.') && numStr.includes(',')) {
+    numStr = numStr.replace(/\./g, '').replace(',', '.');
+  } else if (numStr.includes(',') && !numStr.includes('.')) {
+    // "69,99" → "69.99"
+    numStr = numStr.replace(',', '.');
+  }
+  
+  const value = parseFloat(numStr);
+  if (isNaN(value)) return null;
+  return { value, currency };
+}
+
+function convertPrice(priceStr: string, targetCurrency: Currency, rates: ExchangeRates | null): string {
+  if (!rates || !priceStr) return priceStr;
+  
+  const parsed = parsePrice(priceStr);
+  if (!parsed) return priceStr;
+  
+  if (parsed.currency === targetCurrency) return priceStr;
+  
+  // Convert: source → EUR → target
+  const sourceRate = rates.rates[parsed.currency] || 1;
+  const targetRate = rates.rates[targetCurrency] || 1;
+  const eurValue = parsed.value / sourceRate;
+  const converted = eurValue * targetRate;
+  
+  const symbol = CURRENCY_SYMBOLS[targetCurrency];
+  // Format with 2 decimal places, using comma for EUR
+  if (targetCurrency === 'EUR') {
+    return `${symbol}${converted.toFixed(2).replace('.', ',')}`;
+  }
+  return `${symbol}${converted.toFixed(2)}`;
+}
+
 export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency>('EUR');
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRates | null>(null);
 
   const fetchProducts = async () => {
     try {
@@ -61,9 +123,40 @@ export default function ProductsScreen() {
     }
   };
 
+  const fetchExchangeRates = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/exchange-rates`);
+      setExchangeRates(response.data);
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error);
+    }
+  };
+
+  const loadSavedCurrency = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('selectedCurrency');
+      if (saved && ['EUR', 'USD', 'SRD'].includes(saved)) {
+        setSelectedCurrency(saved as Currency);
+      }
+    } catch (error) {
+      console.error('Error loading currency:', error);
+    }
+  };
+
+  const handleCurrencyChange = async (currency: Currency) => {
+    setSelectedCurrency(currency);
+    try {
+      await AsyncStorage.setItem('selectedCurrency', currency);
+    } catch (error) {
+      console.error('Error saving currency:', error);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
+      fetchExchangeRates();
+      loadSavedCurrency();
     }, [])
   );
 
@@ -143,13 +236,29 @@ export default function ProductsScreen() {
             <Text style={styles.productBrand}>{item.brand}</Text>
           ) : null}
           <View style={styles.priceRow}>
-            <Text style={styles.productPrice}>
-              {item.price || 'Price N/A'}
-            </Text>
+            {selectedCurrency === 'EUR' || !exchangeRates ? (
+              <Text style={styles.productPrice}>
+                {item.price || 'Price N/A'}
+              </Text>
+            ) : (
+              <Text style={styles.productPrice}>
+                {convertPrice(item.price, selectedCurrency, exchangeRates)}
+              </Text>
+            )}
             {item.original_price ? (
-              <Text style={styles.originalPrice}>{item.original_price}</Text>
+              <Text style={styles.originalPrice}>
+                {selectedCurrency === 'EUR' || !exchangeRates 
+                  ? item.original_price 
+                  : convertPrice(item.original_price, selectedCurrency, exchangeRates)}
+              </Text>
             ) : null}
           </View>
+          {/* Show original EUR price hint when converted */}
+          {selectedCurrency !== 'EUR' && exchangeRates && item.price ? (
+            <Text style={styles.originalCurrencyHint}>
+              {item.price}
+            </Text>
+          ) : null}
           {/* Size and Color underneath price */}
           {(item.color || item.size) ? (
             <View style={styles.attributesRow}>
@@ -209,8 +318,31 @@ export default function ProductsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Products</Text>
-        <Text style={styles.headerSubtitle}>{products.length} items saved</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>My Products</Text>
+            <Text style={styles.headerSubtitle}>{products.length} items saved</Text>
+          </View>
+          <View style={styles.currencyToggle}>
+            {(['EUR', 'USD', 'SRD'] as Currency[]).map((c) => (
+              <TouchableOpacity
+                key={c}
+                style={[
+                  styles.currencyButton,
+                  selectedCurrency === c && styles.currencyButtonActive,
+                ]}
+                onPress={() => handleCurrencyChange(c)}
+              >
+                <Text style={[
+                  styles.currencyButtonText,
+                  selectedCurrency === c && styles.currencyButtonTextActive,
+                ]}>
+                  {c === 'EUR' ? '€' : c === 'USD' ? '$' : 'SRD'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </View>
 
       <FlashList
@@ -244,6 +376,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1f1f1f',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
@@ -253,6 +390,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
+  },
+  currencyToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  currencyButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 42,
+    alignItems: 'center',
+  },
+  currencyButtonActive: {
+    backgroundColor: '#6366f1',
+  },
+  currencyButtonText: {
+    color: '#6b7280',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  currencyButtonTextActive: {
+    color: '#fff',
   },
   loadingContainer: {
     flex: 1,
@@ -356,6 +518,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     textDecorationLine: 'line-through',
+  },
+  originalCurrencyHint: {
+    fontSize: 11,
+    color: '#6b728099',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   attributesRow: {
     flexDirection: 'row',
