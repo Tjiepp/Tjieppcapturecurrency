@@ -314,6 +314,51 @@ export default function CaptureScreen() {
             }
           }
           
+          // Amazon specific: extract price from Amazon's price structure
+          let amazonMainPrice = '';
+          let amazonOriginalPrice = '';
+          if (hostname.includes('amazon.')) {
+            // Amazon uses nested span structure: .a-price > .a-offscreen contains the full price
+            // The FIRST .a-price in the core price area is the current price
+            const corePrice = document.querySelector('#corePrice_feature_div, #corePriceDisplay_desktop_feature_div, #apex_offerDisplay_desktop');
+            if (corePrice) {
+              const priceEls = corePrice.querySelectorAll('.a-price .a-offscreen');
+              if (priceEls.length > 0) {
+                amazonMainPrice = priceEls[0].textContent?.trim() || '';
+              }
+              // The basis/original price (strikethrough)
+              const basisPrice = corePrice.querySelector('.a-text-price .a-offscreen, [data-a-strike="true"] .a-offscreen');
+              if (basisPrice) {
+                amazonOriginalPrice = basisPrice.textContent?.trim() || '';
+              }
+            }
+            // Fallback: try other common Amazon price selectors
+            if (!amazonMainPrice) {
+              const fallbackSelectors = [
+                '#priceblock_ourprice', '#priceblock_dealprice', '#priceblock_saleprice',
+                '.a-price[data-a-color="price"] .a-offscreen',
+                '#price_inside_buybox', '#newBuyBoxPrice',
+                'span.a-price .a-offscreen'
+              ];
+              for (const sel of fallbackSelectors) {
+                const el = document.querySelector(sel);
+                if (el) {
+                  const text = (el.textContent || '').trim();
+                  // Make sure it's an actual price (contains currency symbol or digits), NOT a percentage
+                  if (text && /[€$£\d]/.test(text) && !text.includes('%')) {
+                    amazonMainPrice = text;
+                    break;
+                  }
+                }
+              }
+            }
+            // Fallback for original price
+            if (!amazonOriginalPrice) {
+              const origEl = document.querySelector('.a-text-price .a-offscreen, .priceBlockStrikePriceString, .a-price[data-a-color="secondary"] .a-offscreen');
+              if (origEl) amazonOriginalPrice = origEl.textContent?.trim() || '';
+            }
+          }
+          
           // Extended price selectors
           const allPriceSelectors = [
             '[class*="price"]', '[id*="price"]', '[data-price]', 
@@ -329,7 +374,9 @@ export default function CaptureScreen() {
             const text = el.textContent?.trim();
             const dataPrice = el.getAttribute('data-price') || el.getAttribute('content');
             return text || dataPrice;
-          }).filter(Boolean).filter(p => /[\\d\u20AC$\u00A3\u00A5]/.test(p));
+          }).filter(Boolean)
+            .filter(p => /[\d\u20AC$\u00A3\u00A5]/.test(p))
+            .filter(p => !/^-?\d+\s*%$/.test(p.trim())); // Filter out discount percentages like "-25%"
           
           // Find the main product image
           let productImageUrl = '';
@@ -381,6 +428,7 @@ export default function CaptureScreen() {
             selectedColor, selectedSize,
             structuredPrice, structuredOriginalPrice, 
             bolMainPrice, bolOriginalPrice,
+            amazonMainPrice, amazonOriginalPrice,
             productImageUrl,
             mainContent, structuredData, url: window.location.href
           });

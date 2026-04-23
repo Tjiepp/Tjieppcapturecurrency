@@ -173,6 +173,15 @@ async def analyze_product_screenshot(screenshot_base64: str, url: str = "", page
                 bol_main_price = parsed_content.get("bolMainPrice", "")
                 bol_original_price = parsed_content.get("bolOriginalPrice", "")
                 
+                # Amazon-specific DOM-extracted prices (most reliable for Amazon)
+                amazon_main_price = parsed_content.get("amazonMainPrice", "")
+                amazon_original_price = parsed_content.get("amazonOriginalPrice", "")
+                
+                if amazon_main_price:
+                    extracted_prices_hint += f"\nAMAZON MAIN PRICE (from product page DOM): {amazon_main_price}"
+                if amazon_original_price:
+                    extracted_prices_hint += f"\nAMAZON ORIGINAL/WAS PRICE (strikethrough): {amazon_original_price}"
+                
                 if bol_main_price:
                     extracted_prices_hint += f"\nBOL.COM MAIN PRICE (from buy block DOM): {bol_main_price}"
                 if bol_original_price:
@@ -229,7 +238,10 @@ Extract as much detail as possible. Return ONLY a valid JSON object with these f
 
 CRITICAL PRICE RULES (READ CAREFULLY):
 - "price" = the MAIN DISPLAYED price on the product page, the one the customer sees prominently.
-- If "BOL.COM MAIN PRICE (from buy block DOM)" is provided above, ALWAYS USE THAT as the "price" - it is the most reliable source.
+- NEVER use a discount PERCENTAGE (like "-25%", "-30%", "-65%") as the price. The price MUST be an actual monetary amount with a currency symbol (€, $, £).
+- If "AMAZON MAIN PRICE" is provided above, ALWAYS USE THAT as the "price" - it is the most reliable source for Amazon pages.
+- If "BOL.COM MAIN PRICE (from buy block DOM)" is provided above, ALWAYS USE THAT as the "price" - it is the most reliable source for bol.com pages.
+- On Amazon: the price is the monetary amount (e.g., €53,29) shown next to the product, NOT the discount percentage badge (e.g., "-15%"). Ignore any percentage badges completely.
 - On bol.com: the MAIN price is the one displayed near "In winkelwagen" or "Nu voor". This is what the customer actually pays.
 - WARNING: JSON-LD structured data "offers.price" or "offers.lowPrice" on bol.com often shows the LOWEST marketplace seller price, which may be DIFFERENT from the main displayed price. DO NOT use these as "price" if a "BOL.COM MAIN PRICE" is provided.
 - "original_price" = ONLY the higher crossed-out/strikethrough price shown if there is a discount. If no discount/strikethrough is visible, leave EMPTY.
@@ -282,10 +294,33 @@ OTHER RULES:
         else:
             result = json.loads(response)
         
+        # Post-processing: validate price is not a percentage
+        extracted_price = result.get("price", "")
+        extracted_original = result.get("original_price", "")
+        
+        # If price looks like a percentage (e.g., "-25%", "30%"), it's wrong - clear it
+        if extracted_price and re.match(r'^-?\d+%$', extracted_price.strip()):
+            logger.warning(f"Price looks like a percentage: {extracted_price}, clearing it")
+            extracted_price = ""
+        if extracted_original and re.match(r'^-?\d+%$', extracted_original.strip()):
+            logger.warning(f"Original price looks like a percentage: {extracted_original}, clearing it")
+            extracted_original = ""
+        
+        # If price and original_price are swapped (price > original), swap them
+        def extract_number(p):
+            m = re.search(r'[\d]+[.,]?[\d]*', p.replace('.', '').replace(',', '.') if ',' in p else p)
+            return float(m.group().replace(',', '.')) if m else 0
+        
+        price_val = extract_number(extracted_price)
+        orig_val = extract_number(extracted_original)
+        if price_val > 0 and orig_val > 0 and price_val > orig_val:
+            logger.warning(f"Price ({extracted_price}) > Original ({extracted_original}), swapping")
+            extracted_price, extracted_original = extracted_original, extracted_price
+        
         return {
             "name": result.get("name", ""),
-            "price": result.get("price", ""),
-            "original_price": result.get("original_price", ""),
+            "price": extracted_price,
+            "original_price": extracted_original,
             "currency": result.get("currency", ""),
             "description": result.get("description", ""),
             "brand": result.get("brand", ""),
