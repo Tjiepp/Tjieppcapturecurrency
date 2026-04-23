@@ -294,28 +294,68 @@ OTHER RULES:
         else:
             result = json.loads(response)
         
-        # Post-processing: validate price is not a percentage
+        # Post-processing: fix common AI extraction mistakes
         extracted_price = result.get("price", "")
         extracted_original = result.get("original_price", "")
         
-        # If price looks like a percentage (e.g., "-25%", "30%"), it's wrong - clear it
-        if extracted_price and re.match(r'^-?\d+%$', extracted_price.strip()):
-            logger.warning(f"Price looks like a percentage: {extracted_price}, clearing it")
-            extracted_price = ""
-        if extracted_original and re.match(r'^-?\d+%$', extracted_original.strip()):
-            logger.warning(f"Original price looks like a percentage: {extracted_original}, clearing it")
+        def is_percentage(val):
+            """Check if a value looks like a percentage, not a real price."""
+            if not val:
+                return False
+            cleaned = val.strip()
+            # Match patterns: "-15%", "- 15%", "-15 %", "15%", "-15% korting", etc.
+            return bool(re.search(r'^-?\s*\d+\s*%', cleaned))
+        
+        def is_real_price(val):
+            """Check if a value looks like an actual monetary price."""
+            if not val:
+                return False
+            # Must contain a currency symbol or currency code + number
+            return bool(re.search(r'[€$£¥]|EUR|USD|GBP|SRD', val, re.IGNORECASE)) and bool(re.search(r'\d', val))
+        
+        def extract_number(p):
+            if not p:
+                return 0
+            # Remove thousands separators and normalize
+            cleaned = p.replace(' ', '')
+            # Handle EU format: 1.234,56 → 1234.56
+            if ',' in cleaned and '.' in cleaned:
+                cleaned = cleaned.replace('.', '').replace(',', '.')
+            elif ',' in cleaned:
+                cleaned = cleaned.replace(',', '.')
+            m = re.search(r'[\d]+\.?[\d]*', cleaned)
+            return float(m.group()) if m else 0
+        
+        # RULE 1: If price is a percentage, it's WRONG
+        if is_percentage(extracted_price):
+            logger.warning(f"Price is a percentage: '{extracted_price}' — replacing with original_price")
+            if extracted_original and not is_percentage(extracted_original):
+                # Use original_price as the real price, clear original
+                extracted_price = extracted_original
+                extracted_original = ""
+            else:
+                extracted_price = ""
+        
+        # RULE 2: If original_price is a percentage, clear it
+        if is_percentage(extracted_original):
+            logger.warning(f"Original price is a percentage: '{extracted_original}' — clearing it")
             extracted_original = ""
         
-        # If price and original_price are swapped (price > original), swap them
-        def extract_number(p):
-            m = re.search(r'[\d]+[.,]?[\d]*', p.replace('.', '').replace(',', '.') if ',' in p else p)
-            return float(m.group().replace(',', '.')) if m else 0
+        # RULE 3: If price is empty but original_price has a real price, use it
+        if not extracted_price and extracted_original and is_real_price(extracted_original):
+            logger.warning(f"Price empty, using original_price: '{extracted_original}'")
+            extracted_price = extracted_original
+            extracted_original = ""
         
+        # RULE 4: If both are real prices and price > original, swap them
+        # (price should be the LOWER/current price, original should be HIGHER/was price)
         price_val = extract_number(extracted_price)
         orig_val = extract_number(extracted_original)
         if price_val > 0 and orig_val > 0 and price_val > orig_val:
-            logger.warning(f"Price ({extracted_price}) > Original ({extracted_original}), swapping")
+            logger.warning(f"Price ({extracted_price}={price_val}) > Original ({extracted_original}={orig_val}), swapping")
             extracted_price, extracted_original = extracted_original, extracted_price
+        
+        logger.info(f"Final price: '{extracted_price}', original: '{extracted_original}'")
         
         return {
             "name": result.get("name", ""),
