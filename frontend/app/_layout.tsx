@@ -16,11 +16,8 @@ function ShareIntentHandler({ children }: { children: React.ReactNode }) {
       
       if (sharedUrl && sharedUrl.startsWith('http')) {
         console.log('Received shared URL:', sharedUrl);
-        // Navigate to capture screen with the URL
-        router.push({
-          pathname: '/capture',
-          params: { url: sharedUrl }
-        });
+        // Navigate to capture screen with encoded URL
+        router.push(`/capture?url=${encodeURIComponent(sharedUrl)}`);
         resetShareIntent();
       }
     }

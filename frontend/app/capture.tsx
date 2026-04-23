@@ -136,7 +136,9 @@ function calculateDeliveryPrices(dimStr: string, weightStr: string): { category:
 
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ url?: string }>();
-  const [url, setUrl] = useState(params.url || '');
+  // Decode the URL param (it's encoded to safely pass through query string)
+  const decodedUrl = params.url ? decodeURIComponent(params.url) : '';
+  const [url, setUrl] = useState(decodedUrl);
   const [isLoading, setIsLoading] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
   const [screenshot, setScreenshot] = useState<string | null>(null);

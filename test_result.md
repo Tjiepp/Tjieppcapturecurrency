@@ -120,6 +120,21 @@ backend:
         agent: "testing"
         comment: "✅ TESTED: Health check endpoint working correctly. Returns status: healthy with timestamp"
 
+  - task: "Exchange rates endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "GET /api/exchange-rates endpoint with 1-hour caching using open.er-api.com (free, no key, supports EUR/USD/SRD)"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Exchange rates endpoint working correctly. Returns base: EUR, rates object with EUR=1.0, USD=1.172367, SRD=43.99462, and last_updated timestamp. All required fields present and values valid."
+
   - task: "Analyze screenshot with AI endpoint"
     implemented: true
     working: true
@@ -293,6 +308,6 @@ agent_communication:
   - agent: "testing"
     message: "🎉 COMPREHENSIVE BACKEND TESTING COMPLETE - ALL 6 TESTS PASSED (100% SUCCESS). ✅ Verified both priority tasks: 1) Create product endpoint correctly saves ALL 18 fields including weight='350g' and dimensions='30x20x12 cm' 2) AI analysis returns weight/dimensions fields with high confidence (0.98). All CRUD operations, health check, and GPT-5.2 AI integration working perfectly. Backend fully production-ready."
   - agent: "main"
-    message: "Model reverted back to gpt-5.2 (was temporarily gpt-4o-mini). Frontend changes: 1) Fixed 'Auto-get info from URL' - improved pasteFromClipboard with Clipboard.hasStringAsync(), trim-before-check, and router.push with params object instead of string interpolation. 2) Aligned gallery upload (add.tsx) with 3-step capture flow: added shipping calculations, delivery price card, delivery data in confirmation modal and save call. 3) Fixed stray ')}' in capture.tsx causing 'Text strings must be rendered within Text component' error. Please verify: a) Backend health check works. b) Create product with shipping_category and delivery_cost fields. c) AI analysis endpoint still works with gpt-5.2."
+    message: "New features: 1) Added GET /api/exchange-rates endpoint with 1-hour caching using open.er-api.com (free, no key, supports EUR/USD/SRD). 2) Added Amazon.nl-specific price extraction in JS injection + AI prompt (fixes discount percentage being extracted as price). 3) Backend post-processing validates price is not a percentage and auto-swaps if price > original_price. 4) Switched model to gpt-4o-mini for cost savings. 5) Fixed URL navigation: proper encodeURIComponent + decodeURIComponent, InteractionManager for navigation timing, added manual URL input fallback. Please test: a) GET /api/exchange-rates returns EUR/USD/SRD rates. b) Create product with all shipping fields still works. c) Health check works."
   - agent: "testing"
-    message: "🎉 SHIPPING FIELDS VERIFICATION COMPLETE - ALL 4 TESTS PASSED (100% SUCCESS). ✅ Verified specific review request requirements: 1) Health check endpoint returns status: healthy ✅ 2) Create product with shipping fields (weight: 500g, dimensions: 30x20x15 cm, shipping_category: M, delivery costs) saves correctly ✅ 3) Get products endpoint returns all shipping fields intact ✅ 4) Delete test product works correctly ✅. Backend with shipping functionality fully verified and production-ready."
+    message: "🎉 REVIEW REQUEST TESTING COMPLETE - ALL 5 TESTS PASSED (100% SUCCESS). ✅ Verified all specific requirements: 1) Health check endpoint returns status: healthy ✅ 2) NEW Exchange rates endpoint returns base: EUR, rates with EUR=1.0, USD=1.172367, SRD=43.99462, and last_updated timestamp ✅ 3) Create product with exact shipping fields (Test Amazon Product, €53,29, 1.2 kg, 45x30x20 cm, shipping_category: L, delivery costs) saves correctly ✅ 4) Get products endpoint returns all shipping fields intact ✅ 5) Delete test product works correctly ✅. Backend fully verified and production-ready."

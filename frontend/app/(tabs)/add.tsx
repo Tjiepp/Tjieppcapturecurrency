@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,6 +101,8 @@ export default function AddProductScreen() {
   const [weight, setWeight] = useState('');
   const [dimensions, setDimensions] = useState('');
   const [deliveryCost, setDeliveryCost] = useState('');
+  const [navigating, setNavigating] = useState(false);
+  const [manualUrl, setManualUrl] = useState('');
 
   const pickImageAndAnalyze = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -180,19 +183,37 @@ export default function AddProductScreen() {
     }
   };
 
-  const pasteFromClipboard = async () => {
-    try {
-      const hasString = await Clipboard.hasStringAsync();
-      if (!hasString) {
-        Alert.alert('Clipboard Empty', 'No text found in clipboard. Copy a product URL first.');
-        return;
+  // Shared navigation function that properly encodes the URL
+  const navigateToCapture = (productUrl: string) => {
+    setNavigating(true);
+    // Encode the URL to safely pass through Expo Router query params
+    // (URLs with ? and & would otherwise break the routing)
+    const encodedUrl = encodeURIComponent(productUrl);
+    
+    // Use InteractionManager to ensure navigation runs after any pending animations
+    InteractionManager.runAfterInteractions(() => {
+      try {
+        router.push(`/capture?url=${encodedUrl}`);
+      } catch (err) {
+        console.error('Navigation error:', err);
+        Alert.alert('Navigation Error', 'Could not open the capture screen. Please try again.');
+      } finally {
+        // Reset navigating state after a delay
+        setTimeout(() => setNavigating(false), 1000);
       }
-      
+    });
+  };
+
+  const pasteFromClipboard = async () => {
+    if (navigating) return;
+    
+    try {
+      // Read clipboard content
       const rawContent = await Clipboard.getStringAsync();
       const trimmedUrl = (rawContent || '').trim();
       
       if (!trimmedUrl) {
-        Alert.alert('Clipboard Empty', 'No content found in clipboard.');
+        Alert.alert('Clipboard Empty', 'No content found in clipboard. Copy a product URL first.');
         return;
       }
       
@@ -204,15 +225,24 @@ export default function AddProductScreen() {
         return;
       }
       
-      // Navigate to capture screen with the URL
-      router.push({
-        pathname: '/capture',
-        params: { url: trimmedUrl },
-      });
+      navigateToCapture(trimmedUrl);
     } catch (error: any) {
       console.error('Clipboard error:', error);
-      Alert.alert('Clipboard Error', 'Could not read from clipboard. Please try again.');
+      Alert.alert('Clipboard Error', 'Could not read from clipboard. Try pasting the URL manually below.');
     }
+  };
+
+  const handleManualUrlGo = () => {
+    const trimmedUrl = manualUrl.trim();
+    if (!trimmedUrl) {
+      Alert.alert('No URL', 'Please paste a product URL first.');
+      return;
+    }
+    if (!trimmedUrl.toLowerCase().startsWith('http')) {
+      Alert.alert('Invalid URL', 'URL must start with http:// or https://');
+      return;
+    }
+    navigateToCapture(trimmedUrl);
   };
 
   const handleSavePress = () => {
@@ -342,16 +372,44 @@ export default function AddProductScreen() {
                     <Text style={styles.sectionTitle}>Product URL</Text>
                     
                     <TouchableOpacity 
-                      style={styles.mainButton}
+                      style={[styles.mainButton, navigating && styles.mainButtonDisabled]}
                       onPress={pasteFromClipboard}
+                      disabled={navigating}
                     >
-                      <Ionicons name="add-circle-outline" size={22} color="#fff" />
-                      <Text style={styles.mainButtonText}>Add to my Tjiepp</Text>
+                      {navigating ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="clipboard-outline" size={22} color="#fff" />
+                      )}
+                      <Text style={styles.mainButtonText}>
+                        {navigating ? 'Opening...' : 'Paste from clipboard'}
+                      </Text>
                     </TouchableOpacity>
                     
                     <Text style={styles.hintText}>
-                      Copy a product URL, then tap "Add to my Tjiepp"
+                      Copy a product URL, then tap the button above
                     </Text>
+
+                    {/* Manual URL input fallback */}
+                    <View style={styles.manualUrlRow}>
+                      <TextInput
+                        style={styles.manualUrlInput}
+                        value={manualUrl}
+                        onChangeText={setManualUrl}
+                        placeholder="Or paste URL here manually..."
+                        placeholderTextColor="#4b5563"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="url"
+                      />
+                      <TouchableOpacity
+                        style={[styles.manualUrlButton, (!manualUrl.trim() || navigating) && styles.mainButtonDisabled]}
+                        onPress={handleManualUrlGo}
+                        disabled={!manualUrl.trim() || navigating}
+                      >
+                        <Ionicons name="arrow-forward" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Divider */}
@@ -720,6 +778,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
+  },
+  mainButtonDisabled: {
+    opacity: 0.6,
+  },
+  manualUrlRow: {
+    flexDirection: 'row',
+    marginTop: 14,
+    gap: 8,
+  },
+  manualUrlInput: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#fff',
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+  },
+  manualUrlButton: {
+    backgroundColor: '#6366f1',
+    borderRadius: 12,
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearButton: {
     flexDirection: 'row',

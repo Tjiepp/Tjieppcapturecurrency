@@ -3,9 +3,10 @@
 Backend Testing Script for Product Capture App
 Tests the specific requirements from the review request:
 1. Health check endpoint
-2. Create product with shipping fields
-3. Get products to verify shipping fields
-4. Delete test product
+2. Exchange rates endpoint (NEW)
+3. Create product with shipping fields
+4. Get products to verify shipping fields
+5. Delete test product
 """
 
 import requests
@@ -39,24 +40,84 @@ def test_health_check():
         print(f"❌ Health check failed with error: {e}")
         return False
 
+def test_exchange_rates():
+    """Test the exchange rates endpoint (NEW)"""
+    print("\n🔍 Testing Exchange Rates Endpoint...")
+    try:
+        response = requests.get(f"{BACKEND_URL}/exchange-rates", timeout=10)
+        print(f"Status Code: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"Response: {json.dumps(data, indent=2)}")
+            
+            # Verify expected structure
+            required_fields = ["base", "rates", "last_updated"]
+            missing_fields = [field for field in required_fields if field not in data]
+            
+            if missing_fields:
+                print(f"❌ Exchange rates response missing fields: {missing_fields}")
+                return False
+            
+            # Check base currency
+            if data["base"] != "EUR":
+                print(f"❌ Expected base currency 'EUR', got '{data['base']}'")
+                return False
+            
+            # Check required rates
+            rates = data["rates"]
+            required_currencies = ["EUR", "USD", "SRD"]
+            missing_currencies = [curr for curr in required_currencies if curr not in rates]
+            
+            if missing_currencies:
+                print(f"❌ Exchange rates missing currencies: {missing_currencies}")
+                return False
+            
+            # Verify EUR rate is 1.0
+            if rates["EUR"] != 1.0:
+                print(f"❌ EUR rate should be 1.0, got {rates['EUR']}")
+                return False
+            
+            # Verify USD and SRD rates are positive
+            if rates["USD"] <= 0:
+                print(f"❌ USD rate should be > 0, got {rates['USD']}")
+                return False
+            
+            if rates["SRD"] <= 0:
+                print(f"❌ SRD rate should be > 0, got {rates['SRD']}")
+                return False
+            
+            print("✅ Exchange rates endpoint working correctly")
+            print(f"   Base: {data['base']}")
+            print(f"   EUR: {rates['EUR']}")
+            print(f"   USD: {rates['USD']}")
+            print(f"   SRD: {rates['SRD']}")
+            print(f"   Last Updated: {data['last_updated']}")
+            return True
+            
+        else:
+            print(f"❌ Exchange rates failed - status code: {response.status_code}")
+            print(f"Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Exchange rates failed with error: {e}")
+        return False
+
 def test_create_product_with_shipping():
     """Test creating a product with shipping fields"""
     print("\n🔍 Testing Create Product with Shipping Fields...")
     
     # Test product data with all shipping fields as specified in the review request
     test_product = {
-        "name": "Test Product",
-        "price": "€29.99",
-        "weight": "500g",
-        "dimensions": "30x20x15 cm",
-        "shipping_category": "M",
-        "delivery_cost_webshop": "€5.95",
-        "delivery_cost_size": "€5.00",
-        "delivery_cost_weight": "€3.75",
-        "description": "Test product for shipping verification",
-        "brand": "Test Brand",
-        "category": "Test Category",
-        "original_url": "https://test.example.com/product"
+        "name": "Test Amazon Product",
+        "price": "€53,29",
+        "weight": "1.2 kg",
+        "dimensions": "45x30x20 cm",
+        "shipping_category": "L",
+        "delivery_cost_webshop": "Gratis",
+        "delivery_cost_size": "€15.00",
+        "delivery_cost_weight": "€9.00"
     }
     
     try:
@@ -125,14 +186,14 @@ def test_get_products(product_id):
                 
                 # Verify shipping fields are present in the retrieved product
                 expected_shipping_data = {
-                    "name": "Test Product",
-                    "price": "€29.99",
-                    "weight": "500g",
-                    "dimensions": "30x20x15 cm",
-                    "shipping_category": "M",
-                    "delivery_cost_webshop": "€5.95",
-                    "delivery_cost_size": "€5.00",
-                    "delivery_cost_weight": "€3.75"
+                    "name": "Test Amazon Product",
+                    "price": "€53,29",
+                    "weight": "1.2 kg",
+                    "dimensions": "45x30x20 cm",
+                    "shipping_category": "L",
+                    "delivery_cost_webshop": "Gratis",
+                    "delivery_cost_size": "€15.00",
+                    "delivery_cost_weight": "€9.00"
                 }
                 
                 all_fields_correct = True
@@ -195,7 +256,11 @@ def main():
     health_result = test_health_check()
     test_results.append(("Health Check", health_result))
     
-    # Test 2: Create Product with Shipping Fields
+    # Test 2: Exchange Rates (NEW)
+    exchange_result = test_exchange_rates()
+    test_results.append(("Exchange Rates", exchange_result))
+    
+    # Test 3: Create Product with Shipping Fields
     product_id, create_result = test_create_product_with_shipping()
     test_results.append(("Create Product with Shipping", create_result))
     
