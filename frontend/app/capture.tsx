@@ -283,36 +283,80 @@ export default function CaptureScreen() {
             }
           }
           
-          // bol.com specific: find the MAIN buy-block price (not marketplace prices)
+          // bol.com specific: find the RED price (current price) and strikethrough price (was price)
           let bolMainPrice = '';
           let bolOriginalPrice = '';
           const hostname = window.location.hostname || '';
           if (hostname.includes('bol.com') || hostname.includes('bol.nl')) {
-            // Try buy block area first
-            const buyBlock = document.querySelector('[data-test="buy-block"], .buy-block, .product-prices, [class*="buy-block"]');
-            if (buyBlock) {
-              // Current price in buy block
-              const priceEl = buyBlock.querySelector('[data-test="price"], .promo-price, [class*="promo-price"], [class*="sale-price"], .price--current');
-              if (priceEl) bolMainPrice = priceEl.textContent?.trim() || '';
-              // Original/was price in buy block
-              const origEl = buyBlock.querySelector('[data-test="from-price"], .price--from, [class*="from-price"], [class*="was-price"], s, del, [style*="line-through"]');
-              if (origEl) bolOriginalPrice = origEl.textContent?.trim() || '';
-            }
-            // Fallback: look for price near "In winkelwagen" button
-            if (!bolMainPrice) {
-              const allPriceEls = document.querySelectorAll('[class*="price"]:not([class*="shipping"]):not([class*="delivery"])');
-              allPriceEls.forEach(el => {
-                const text = (el.textContent || '').trim();
-                if (text.match(/€\s*\d+[,.]?\d{0,2}$/) && !bolMainPrice) {
-                  // Check if this is a strikethrough/was price
-                  const styles = window.getComputedStyle(el);
-                  if (styles.textDecorationLine === 'line-through' || el.tagName === 'S' || el.tagName === 'DEL') {
-                    if (!bolOriginalPrice) bolOriginalPrice = text;
-                  } else {
-                    bolMainPrice = text;
-                  }
+            
+            // STRATEGY: On bol.com, the CORRECT/CURRENT price is always in RED color
+            // Scan ALL elements for red-colored prices
+            const allEls = document.querySelectorAll('*');
+            let redPrices = [];
+            let strikethroughPrices = [];
+            let regularPrices = [];
+            
+            allEls.forEach(el => {
+              const text = (el.textContent || '').trim();
+              // Only check elements that look like prices (€ followed by digits)
+              if (!text.match(/^€?\s*\d+[,.]?\d{0,2}$/) && !text.match(/^\d+[,.]?\d{0,2}$/)) return;
+              // Skip if this element has many children (container, not the actual price text)
+              if (el.children.length > 2) return;
+              
+              const styles = window.getComputedStyle(el);
+              const color = styles.color;
+              const textDecoration = styles.textDecorationLine;
+              const tagName = el.tagName;
+              
+              // Check if strikethrough (= was/original price)
+              if (textDecoration === 'line-through' || tagName === 'S' || tagName === 'DEL') {
+                strikethroughPrices.push(text);
+                return;
+              }
+              
+              // Check if red-colored (= current/sale price on bol.com)
+              // Red colors: rgb(r, g, b) where r > 150 and g < 80 and b < 80
+              const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+              if (rgbMatch) {
+                const r = parseInt(rgbMatch[1]);
+                const g = parseInt(rgbMatch[2]);
+                const b = parseInt(rgbMatch[3]);
+                if (r > 150 && g < 80 && b < 80) {
+                  redPrices.push(text);
+                  return;
                 }
-              });
+              }
+              
+              // Regular (non-red, non-strikethrough) price
+              if (text.includes('€') || text.match(/^\d+[,.]?\d{0,2}$/)) {
+                regularPrices.push(text);
+              }
+            });
+            
+            // Priority: RED prices first (these are the current/sale prices on bol.com)
+            if (redPrices.length > 0) {
+              bolMainPrice = redPrices[0];
+            }
+            if (strikethroughPrices.length > 0) {
+              bolOriginalPrice = strikethroughPrices[0];
+            }
+            
+            // If no red price found, try specific selectors
+            if (!bolMainPrice) {
+              const buyBlock = document.querySelector('[data-test="buy-block"], .buy-block, .product-prices, [class*="buy-block"]');
+              if (buyBlock) {
+                const priceEl = buyBlock.querySelector('[data-test="price"], .promo-price, [class*="promo-price"], [class*="sale-price"], .price--current');
+                if (priceEl) bolMainPrice = priceEl.textContent?.trim() || '';
+                if (!bolOriginalPrice) {
+                  const origEl = buyBlock.querySelector('[data-test="from-price"], .price--from, [class*="from-price"], s, del');
+                  if (origEl) bolOriginalPrice = origEl.textContent?.trim() || '';
+                }
+              }
+            }
+            
+            // Final fallback: first regular price
+            if (!bolMainPrice && regularPrices.length > 0) {
+              bolMainPrice = regularPrices[0];
             }
           }
           

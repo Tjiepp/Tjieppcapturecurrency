@@ -303,57 +303,56 @@ OTHER RULES:
             if not val:
                 return False
             cleaned = val.strip()
-            # Match patterns: "-15%", "- 15%", "-15 %", "15%", "-15% korting", etc.
             return bool(re.search(r'^-?\s*\d+\s*%', cleaned))
         
         def is_real_price(val):
             """Check if a value looks like an actual monetary price."""
             if not val:
                 return False
-            # Must contain a currency symbol or currency code + number
             return bool(re.search(r'[€$£¥]|EUR|USD|GBP|SRD', val, re.IGNORECASE)) and bool(re.search(r'\d', val))
         
-        def extract_number(p):
-            if not p:
-                return 0
-            # Remove thousands separators and normalize
-            cleaned = p.replace(' ', '')
-            # Handle EU format: 1.234,56 → 1234.56
-            if ',' in cleaned and '.' in cleaned:
-                cleaned = cleaned.replace('.', '').replace(',', '.')
-            elif ',' in cleaned:
-                cleaned = cleaned.replace(',', '.')
-            m = re.search(r'[\d]+\.?[\d]*', cleaned)
-            return float(m.group()) if m else 0
+        # Check if we have DOM-extracted prices from specific site extractors
+        dom_main_price = ""
+        dom_original_price = ""
+        try:
+            if page_content:
+                parsed_pc = json.loads(page_content)
+                # bol.com DOM price (RED colored price) - highest priority
+                dom_main_price = parsed_pc.get("bolMainPrice", "") or parsed_pc.get("amazonMainPrice", "")
+                dom_original_price = parsed_pc.get("bolOriginalPrice", "") or parsed_pc.get("amazonOriginalPrice", "")
+        except (json.JSONDecodeError, TypeError):
+            pass
         
-        # RULE 1: If price is a percentage, it's WRONG
-        if is_percentage(extracted_price):
-            logger.warning(f"Price is a percentage: '{extracted_price}' — replacing with original_price")
-            if extracted_original and not is_percentage(extracted_original):
-                # Use original_price as the real price, clear original
+        # RULE 1: If we have a DOM-extracted main price, ALWAYS use it (it's from the actual page)
+        if dom_main_price and not is_percentage(dom_main_price):
+            logger.info(f"Using DOM-extracted price: '{dom_main_price}' (overriding AI price: '{extracted_price}')")
+            extracted_price = dom_main_price
+            if dom_original_price and not is_percentage(dom_original_price):
+                extracted_original = dom_original_price
+            elif is_percentage(extracted_original):
+                extracted_original = ""
+        else:
+            # No DOM price available — apply AI output corrections
+            
+            # RULE 2: If price is a percentage, it's WRONG
+            if is_percentage(extracted_price):
+                logger.warning(f"Price is a percentage: '{extracted_price}' — replacing with original_price")
+                if extracted_original and not is_percentage(extracted_original):
+                    extracted_price = extracted_original
+                    extracted_original = ""
+                else:
+                    extracted_price = ""
+            
+            # RULE 3: If original_price is a percentage, clear it
+            if is_percentage(extracted_original):
+                logger.warning(f"Original price is a percentage: '{extracted_original}' — clearing it")
+                extracted_original = ""
+            
+            # RULE 4: If price is empty but original_price has a real price, use it
+            if not extracted_price and extracted_original and is_real_price(extracted_original):
+                logger.warning(f"Price empty, using original_price: '{extracted_original}'")
                 extracted_price = extracted_original
                 extracted_original = ""
-            else:
-                extracted_price = ""
-        
-        # RULE 2: If original_price is a percentage, clear it
-        if is_percentage(extracted_original):
-            logger.warning(f"Original price is a percentage: '{extracted_original}' — clearing it")
-            extracted_original = ""
-        
-        # RULE 3: If price is empty but original_price has a real price, use it
-        if not extracted_price and extracted_original and is_real_price(extracted_original):
-            logger.warning(f"Price empty, using original_price: '{extracted_original}'")
-            extracted_price = extracted_original
-            extracted_original = ""
-        
-        # RULE 4: If both are real prices and price > original, swap them
-        # (price should be the LOWER/current price, original should be HIGHER/was price)
-        price_val = extract_number(extracted_price)
-        orig_val = extract_number(extracted_original)
-        if price_val > 0 and orig_val > 0 and price_val > orig_val:
-            logger.warning(f"Price ({extracted_price}={price_val}) > Original ({extracted_original}={orig_val}), swapping")
-            extracted_price, extracted_original = extracted_original, extracted_price
         
         logger.info(f"Final price: '{extracted_price}', original: '{extracted_original}'")
         
